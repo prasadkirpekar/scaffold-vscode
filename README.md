@@ -28,7 +28,20 @@ Scaffold is model-agnostic. You can pair it with GitHub Copilot, Gemini, Claude,
 - Context that stays grounded: Scaffold keeps project requirements, decisions, and knowledge in your workspace so AI outputs stay aligned with real project context.
 - Better continuity: move between tools without losing structure because your source of truth remains local files in your repository.
 
-## Feature Walkthrough (Ordered by Local Image Creation Time)
+## Section Workflow
+
+Scaffold organizes planning into sequential sections:
+
+1. Knowledge Base
+2. Product Requirement Document
+3. Design
+4. Engineering Plan
+5. Ready to Build
+6. Build
+
+Each section can contain nested files and folders. Gate approvals help enforce readiness before progressing.
+
+## Feature Walkthrough
 
 1. **Create New Project**
 
@@ -84,18 +97,6 @@ Produce a coding prompt aligned with your approved plan so implementation stays 
 
 ![Generated coding prompt](assets/generated-prompt-to-give-to-ai-for-code-generation.png)
 
-## Section Workflow
-
-Scaffold organizes planning into sequential sections:
-
-1. Knowledge Base
-2. Product Requirement Document
-3. Design
-4. Engineering Plan
-5. Ready to Build
-6. Build
-
-Each section can contain nested files and folders. Gate approvals help enforce readiness before progressing.
 
 ## Data Layout
 
