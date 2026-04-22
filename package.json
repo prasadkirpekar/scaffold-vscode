@@ -1,7 +1,7 @@
 {
   "name": "scaffold-vscode",
   "displayName": "Scaffold",
-  "description": "Scaffold is a flexible, local-first VS Code extension for individual developers to map requirements and knowledge, customize planning prompts, and keep AI coding on track with workspace context.",
+  "description": "Scaffold is a local-first VS Code extension to turn project context into PRDs, engineering plans, and AI-ready build prompts.",
   "version": "0.0.2",
   "publisher": "prasadkirpekar",
   "author": {
@@ -28,6 +28,7 @@
     "out/**",
     "media/scaffold.png",
     "media/scaffold.svg",
+    "assets/**",
     "package.json",
     "README.md",
     "LICENSE"

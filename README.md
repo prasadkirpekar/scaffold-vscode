@@ -28,6 +28,62 @@ Scaffold is model-agnostic. You can pair it with GitHub Copilot, Gemini, Claude,
 - Context that stays grounded: Scaffold keeps project requirements, decisions, and knowledge in your workspace so AI outputs stay aligned with real project context.
 - Better continuity: move between tools without losing structure because your source of truth remains local files in your repository.
 
+## Feature Walkthrough (Ordered by Local Image Creation Time)
+
+1. **Create New Project**
+
+Create a new project scaffold from the Projects view and start planning in a structured workflow.
+
+![Create new project](assets/create-new-project.png)
+
+2. **Create Knowledge Base**
+
+Capture existing domain knowledge and architecture context before writing requirements.
+
+![Create knowledge base](assets/create-knowledgebase.png)
+
+3. **Define Product Requirements**
+
+Write Product Requirement Document files that become the source of truth for implementation.
+
+![Define product requirements](assets/define-product-requirements.png)
+
+4. **Define UI Specifications**
+
+Document UI behavior and constraints to reduce ambiguity before engineering starts.
+
+![Define UI specifications](assets/define-ui-specifications.png)
+
+5. **Add Engineering Plan (Step 1)**
+
+Break requirements into actionable technical plans and implementation units.
+
+![Add engineering plan step 1](assets/add-engineering-plan.png)
+
+6. **Add Engineering Plan (Step 2)**
+
+Expand the plan with detailed tasks, ownership, and sequencing.
+
+![Add engineering plan step 2](assets/add-engineering-plan-2.png)
+
+7. **Generate Ready-to-Build Task Planning Prompt**
+
+Create an AI-ready prompt from approved sections to produce execution-ready tasks.
+
+![Ready to build prompt generation](assets/ready-to-build-generate-prompt-for-task-planning.png)
+
+8. **Review Generated Ready-to-Build Tasks**
+
+Inspect the generated task list before moving into implementation.
+
+![Generated ready to build tasks](assets/for-ready-to-build-tasks-will-generated.png)
+
+9. **Generate Build Coding Prompt**
+
+Produce a coding prompt aligned with your approved plan so implementation stays on-track.
+
+![Generated coding prompt](assets/generated-prompt-to-give-to-ai-for-code-generation.png)
+
 ## Section Workflow
 
 Scaffold organizes planning into sequential sections:
