@@ -1,7 +1,7 @@
 {
   "name": "scaffold-vscode",
-  "displayName": "Scaffold",
-  "description": "Scaffold is a local-first VS Code extension to turn project context into PRDs, engineering plans, and AI-ready build prompts.",
+  "displayName": "Scaffold: Structured Planning for AI Coding",
+  "description": "Scaffold is a local-first VS Code extension for workspace-scoped planning with gated docs, approvals, and AI-ready code prompts.",
   "version": "0.0.2",
   "publisher": "prasadkirpekar",
   "author": {
@@ -39,7 +39,7 @@
     "prd",
     "engineering plan",
     "knowledge base",
-    "ready to build",
+    "ready to code",
     "ai coding",
     "github copilot",
     "gemini",
@@ -64,10 +64,6 @@
     "views": {
       "scaffold": [
         {
-          "id": "scaffold.projects",
-          "name": "Projects"
-        },
-        {
           "id": "scaffold.knowledgeBase",
           "name": "Knowledge Base"
         },
@@ -85,39 +81,51 @@
         },
         {
           "id": "scaffold.readyToBuild",
-          "name": "Ready to Build"
+          "name": "Ready to Code"
         },
         {
           "id": "scaffold.build",
-          "name": "Build"
+          "name": "Code"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "scaffold.knowledgeBase",
+        "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
+        "when": "!scaffoldInitialized"
+      },
+      {
+        "view": "scaffold.prd",
+        "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
+        "when": "!scaffoldInitialized"
+      },
+      {
+        "view": "scaffold.design",
+        "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
+        "when": "!scaffoldInitialized"
+      },
+      {
+        "view": "scaffold.engineeringPlan",
+        "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
+        "when": "!scaffoldInitialized"
+      },
+      {
+        "view": "scaffold.readyToBuild",
+        "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
+        "when": "!scaffoldInitialized"
+      },
+      {
+        "view": "scaffold.build",
+        "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
+        "when": "!scaffoldInitialized"
+      }
+    ],
     "commands": [
       {
         "command": "scaffold.initializeWorkspace",
         "title": "Initialize Workspace",
         "icon": "$(gear)"
-      },
-      {
-        "command": "scaffold.createProject",
-        "title": "New Project",
-        "icon": "$(add)"
-      },
-      {
-        "command": "scaffold.deleteProject",
-        "title": "Delete Project",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "scaffold.onboardExistingProject",
-        "title": "Onboard Existing Project",
-        "icon": "$(repo-pull)"
-      },
-      {
-        "command": "scaffold.setActiveProject",
-        "title": "Set Active Project",
-        "icon": "$(star-empty)"
       },
       {
         "command": "scaffold.approveSection",
@@ -196,12 +204,12 @@
       },
       {
         "command": "scaffold.approveReadyToBuildSection",
-        "title": "Approve Ready to Build",
+        "title": "Approve Ready to Code",
         "icon": "$(pass-filled)"
       },
       {
         "command": "scaffold.generateReadyToBuildPrompt",
-        "title": "Generate Ready-to-Build Prompt",
+        "title": "Generate Ready-to-Code Prompt",
         "icon": "$(sparkle)"
       },
       {
@@ -216,12 +224,12 @@
       },
       {
         "command": "scaffold.generateBuildPrompt",
-        "title": "Generate Build Coding Prompt",
+        "title": "Generate Code Prompt",
         "icon": "$(rocket)"
       },
       {
         "command": "scaffold.openBuildFolderExternal",
-        "title": "Open Build Folder Externally",
+        "title": "Open Code Folder Externally",
         "icon": "$(go-to-file)"
       },
       {
@@ -243,141 +251,115 @@
     "menus": {
       "view/title": [
         {
-          "command": "scaffold.createProject",
-          "when": "view == scaffold.projects",
-          "group": "navigation",
-          "icon": "$(add)"
-        },
-        {
-          "command": "scaffold.onboardExistingProject",
-          "when": "view == scaffold.projects",
-          "group": "navigation",
-          "icon": "$(repo-pull)"
-        },
-        {
           "command": "scaffold.createKnowledgeBaseFile",
-          "when": "view == scaffold.knowledgeBase && scaffoldProjectActive",
+          "when": "view == scaffold.knowledgeBase && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-file)"
         },
         {
           "command": "scaffold.createKnowledgeBaseFolder",
-          "when": "view == scaffold.knowledgeBase && scaffoldProjectActive",
+          "when": "view == scaffold.knowledgeBase && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-folder)"
         },
         {
           "command": "scaffold.createPrdFile",
-          "when": "view == scaffold.prd && scaffoldProjectActive",
+          "when": "view == scaffold.prd && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-file)"
         },
         {
           "command": "scaffold.createPrdFolder",
-          "when": "view == scaffold.prd && scaffoldProjectActive",
+          "when": "view == scaffold.prd && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-folder)"
         },
         {
           "command": "scaffold.approvePrdSection",
-          "when": "view == scaffold.prd && scaffoldProjectActive",
+          "when": "view == scaffold.prd && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(pass-filled)"
         },
         {
           "command": "scaffold.createDesignFile",
-          "when": "view == scaffold.design && scaffoldProjectActive",
+          "when": "view == scaffold.design && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-file)"
         },
         {
           "command": "scaffold.createDesignFolder",
-          "when": "view == scaffold.design && scaffoldProjectActive",
+          "when": "view == scaffold.design && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-folder)"
         },
         {
           "command": "scaffold.approveDesignSection",
-          "when": "view == scaffold.design && scaffoldProjectActive",
+          "when": "view == scaffold.design && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(pass-filled)"
         },
         {
           "command": "scaffold.createEngineeringPlanFile",
-          "when": "view == scaffold.engineeringPlan && scaffoldProjectActive",
+          "when": "view == scaffold.engineeringPlan && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-file)"
         },
         {
           "command": "scaffold.createEngineeringPlanFolder",
-          "when": "view == scaffold.engineeringPlan && scaffoldProjectActive",
+          "when": "view == scaffold.engineeringPlan && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-folder)"
         },
         {
           "command": "scaffold.approveEngineeringPlanSection",
-          "when": "view == scaffold.engineeringPlan && scaffoldProjectActive",
+          "when": "view == scaffold.engineeringPlan && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(pass-filled)"
         },
         {
           "command": "scaffold.generateReadyToBuildPrompt",
-          "when": "view == scaffold.readyToBuild && scaffoldProjectActive",
+          "when": "view == scaffold.readyToBuild && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(sparkle)"
         },
         {
           "command": "scaffold.approveReadyToBuildSection",
-          "when": "view == scaffold.readyToBuild && scaffoldProjectActive",
+          "when": "view == scaffold.readyToBuild && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(pass-filled)"
         },
         {
           "command": "scaffold.createBuildFile",
-          "when": "view == scaffold.build && scaffoldProjectActive",
+          "when": "view == scaffold.build && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-file)"
         },
         {
           "command": "scaffold.createBuildFolder",
-          "when": "view == scaffold.build && scaffoldProjectActive",
+          "when": "view == scaffold.build && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(new-folder)"
         },
         {
           "command": "scaffold.generateBuildPrompt",
-          "when": "view == scaffold.build && scaffoldProjectActive",
+          "when": "view == scaffold.build && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(rocket)"
         },
         {
           "command": "scaffold.openBuildFolderExternal",
-          "when": "view == scaffold.build && scaffoldProjectActive",
+          "when": "view == scaffold.build && scaffoldInitialized",
           "group": "navigation",
           "icon": "$(go-to-file)"
         },
         {
           "command": "scaffold.refresh",
-          "when": "view == scaffold.projects || view == scaffold.knowledgeBase || view == scaffold.prd || view == scaffold.design || view == scaffold.engineeringPlan || view == scaffold.readyToBuild || view == scaffold.build",
+          "when": "view == scaffold.knowledgeBase || view == scaffold.prd || view == scaffold.design || view == scaffold.engineeringPlan || view == scaffold.readyToBuild || view == scaffold.build",
           "group": "navigation",
           "icon": "$(refresh)"
         }
       ],
       "view/item/context": [
-        {
-          "command": "scaffold.setActiveProject",
-          "when": "view == scaffold.projects"
-        },
-        {
-          "command": "scaffold.deleteProject",
-          "when": "view == scaffold.projects && viewItem == project",
-          "group": "9_modification@2"
-        },
-        {
-          "command": "scaffold.onboardExistingProject",
-          "when": "view == scaffold.projects && viewItem == project",
-          "group": "navigation@2"
-        },
         {
           "command": "scaffold.approveSection",
           "when": "viewItem == section.gate.pending"
@@ -425,8 +407,8 @@
         },
         "scaffold.readyToBuildPromptTemplate": {
           "type": "string",
-          "default": "You are generating Ready-to-Build implementation tasks for Scaffold.\n\nActive project:\n- Name: {{projectName}}\n- ID: {{projectId}}\n\nSource of truth (read in order):\n1) Knowledge Base index: {{knowledgeBaseIndexPath}}\n2) Product Requirement Document index: {{prdIndexPath}}\n3) Design index: {{designIndexPath}}\n4) Engineering Plan index: {{engineeringPlanIndexPath}}\n\nSection roots:\n- Knowledge Base: {{knowledgeBasePath}}\n- Product Requirement Document: {{prdPath}}\n- Design: {{designPath}}\n- Engineering Plan: {{engineeringPlanPath}}\n- Ready to Build: {{readyToBuildPath}}\n\nTask:\nGenerate executable implementation tasks and produce:\n- one master backlog file\n- multiple task files grouped by feature/epic\n- each task with id, title, description, dependencies, acceptance criteria, tests, estimate (S/M/L), and risk\n\nConstraints:\n- Do not invent features beyond source docs.\n- Add explicit Open Question tasks for ambiguities.\n- Keep tasks implementation-ready and testable.\n- Prefer incremental vertical slices.\n\nOutput:\n1) Proposed file tree under {{readyToBuildPath}}\n2) Full file contents\n3) Traceability table from tasks to source files",
-          "markdownDescription": "Template used by **Generate Ready-to-Build Prompt**. Supported tokens: `{{projectName}}`, `{{projectId}}`, `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{readyToBuildPath}}`, `{{buildPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{readyToBuildIndexPath}}`, `{{buildIndexPath}}`."
+          "default": "You are generating Ready-to-Code implementation tasks for Scaffold.\n\nSource of truth (read in order):\n1) Knowledge Base index: {{knowledgeBaseIndexPath}}\n2) Product Requirement Document index: {{prdIndexPath}}\n3) Design index: {{designIndexPath}}\n4) Engineering Plan index: {{engineeringPlanIndexPath}}\n\nSection roots:\n- Knowledge Base: {{knowledgeBasePath}}\n- Product Requirement Document: {{prdPath}}\n- Design: {{designPath}}\n- Engineering Plan: {{engineeringPlanPath}}\n- Ready to Code: {{readyToBuildPath}}\n\nTask:\nGenerate executable implementation tasks and produce:\n- one master backlog file\n- multiple task files grouped by feature/epic\n- each task with id, title, description, dependencies, acceptance criteria, tests, estimate (S/M/L), and risk\n\nConstraints:\n- Do not invent features beyond source docs.\n- Add explicit Open Question tasks for ambiguities.\n- Keep tasks implementation-ready and testable.\n- Prefer incremental vertical slices.\n\nOutput:\n1) Proposed file tree under {{readyToBuildPath}}\n2) Full file contents\n3) Traceability table from tasks to source files",
+          "markdownDescription": "Template used by **Generate Ready-to-Code Prompt**. Supported tokens: `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{readyToBuildPath}}`, `{{buildPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{readyToBuildIndexPath}}`, `{{buildIndexPath}}`."
         },
         "scaffold.readyToBuildPromptOutput": {
           "type": "string",
@@ -436,12 +418,12 @@
             "both"
           ],
           "default": "both",
-          "description": "Where generated Ready-to-Build prompts are sent."
+          "description": "Where generated Ready-to-Code prompts are sent."
         },
         "scaffold.buildPromptTemplate": {
           "type": "string",
-          "default": "You are starting implementation in the Build section for Scaffold.\n\nActive project:\n- Name: {{projectName}}\n- ID: {{projectId}}\n\nRead these planning sources first:\n1) Knowledge Base index: {{knowledgeBaseIndexPath}}\n2) Product Requirement Document index: {{prdIndexPath}}\n3) Design index: {{designIndexPath}}\n4) Engineering Plan index: {{engineeringPlanIndexPath}}\n5) Ready to Build index: {{readyToBuildIndexPath}}\n\nImplementation target:\n- Build root: {{buildPath}}\n- Keep all generated code under this project folder.\n- Respect existing file structure unless a change is required.\n\nTask:\n- Start coding the highest-priority tasks from Ready to Build.\n- Create/update files directly in {{buildPath}} and related project paths.\n- Keep changes small and incremental.\n- Include tests where appropriate.\n\nOutput:\n1) File-by-file change plan\n2) Exact code edits\n3) Validation steps and any open questions",
-          "markdownDescription": "Template used by **Generate Build Coding Prompt**. Supported tokens: `{{projectName}}`, `{{projectId}}`, `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{readyToBuildPath}}`, `{{buildPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{readyToBuildIndexPath}}`, `{{buildIndexPath}}`."
+          "default": "You are starting implementation in the Code section for Scaffold.\n\nRead these planning sources first:\n1) Knowledge Base index: {{knowledgeBaseIndexPath}}\n2) Product Requirement Document index: {{prdIndexPath}}\n3) Design index: {{designIndexPath}}\n4) Engineering Plan index: {{engineeringPlanIndexPath}}\n5) Ready to Code index: {{readyToBuildIndexPath}}\n\nImplementation target:\n- Code root: {{buildPath}}\n- Keep all generated code under the project folder.\n- Respect existing file structure unless a change is required.\n\nTask:\n- Start coding the highest-priority tasks from Ready to Code.\n- Create/update files directly in {{buildPath}} and related project paths.\n- Keep changes small and incremental.\n- Include tests where appropriate.\n\nOutput:\n1) File-by-file change plan\n2) Exact code edits\n3) Validation steps and any open questions",
+          "markdownDescription": "Template used by **Generate Code Prompt**. Supported tokens: `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{readyToBuildPath}}`, `{{buildPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{readyToBuildIndexPath}}`, `{{buildIndexPath}}`."
         },
         "scaffold.buildPromptOutput": {
           "type": "string",
@@ -451,22 +433,7 @@
             "both"
           ],
           "default": "both",
-          "description": "Where generated Build coding prompts are sent."
-        },
-        "scaffold.onboardPromptTemplate": {
-          "type": "string",
-          "default": "You are onboarding an existing codebase into Scaffold project sections.\nThoroughly analyze the entire codebase and produce a structured output folder that can be imported into Scaffold as-is.\n\n=== WORKSPACE CONTEXT ===\n- Workspace root : {{workspaceRootPath}}\n- Project id     : {{projectId}}\n- Project name   : {{projectName}}\n\n=== OUTPUT FOLDER STRUCTURE ===\nCreate one subfolder per section using EXACTLY these folder names:\n  {{knowledgeBasePath}}\n  {{prdPath}}\n  {{designPath}}\n  {{engineeringPlanPath}}\n  {{readyToBuildPath}}\n  {{buildPath}}\n\n=== SECTION DETAILS ===\n\n--- 1. knowledge-base ---\nPURPOSE : Reference documentation and background knowledge about the existing system.\nANALYZE : README files, wikis, inline code comments, existing docs/, architecture notes, environment/config files (.env.example, docker-compose, CI configs), dependency manifests (package.json, requirements.txt, go.mod, Cargo.toml, pom.xml).\nPRODUCE :\n  - overview.md          : High-level description of what the system is, who uses it, core value.\n  - tech-stack.md        : Languages, frameworks, major libraries with versions.\n  - architecture.md      : Component/service map, data flow, external integrations.\n  - data-model.md        : Key entities, relationships, DB schema summary.\n  - environment.md       : Environment variables, secrets, infrastructure requirements.\n  - dependencies.md      : Notable third-party dependencies and their role.\n  - conventions.md       : Coding conventions, naming patterns, folder structure rules.\n  - glossary.md          : Domain-specific terms and abbreviations found in the code.\nFILE FORMAT: .md (Markdown). Use headings, tables, and code blocks where helpful.\n\n--- 2. prd ---\nPURPOSE : Product Requirement Document capturing what the product must do.\nANALYZE : Feature code, route handlers, UI screens, user-facing API endpoints, test descriptions, issue tracker references in comments, changelog entries.\nPRODUCE :\n  - product-overview.md  : Vision, goals, target users, success metrics.\n  - features.md          : Exhaustive feature list grouped by domain. Each feature: name, description, user story, acceptance criteria.\n  - user-flows.md        : Step-by-step user journeys for key workflows.\n  - non-functional.md    : Performance, security, accessibility, compliance requirements inferred from codebase.\n  - out-of-scope.md      : Capabilities NOT present; gaps you observe.\nFILE FORMAT: .md only. Use numbered lists and tables for requirements.\n\n--- 3. design ---\nPURPOSE : Visual/UI design artifacts and component specifications.\nANALYZE : HTML templates, JSX/TSX component files, CSS/Tailwind classes, design tokens, theme files, Storybook stories, image assets.\nPRODUCE :\n  - component-inventory.html : Styled HTML page listing every UI component: name, file path, props/variants.\n  - color-typography.html    : Design tokens rendered as visual swatches: colors, fonts, spacing scale.\n  - layout-patterns.html     : Grid systems, responsive breakpoints, common layout shells with annotated mockups.\n  - ui-states.html           : Loading, empty, error, and success states per key component.\nFILE FORMAT: .html only. Every file must be a complete self-contained HTML5 document with inline CSS. No external CDN links.\n\n--- 4. engineering-plan ---\nPURPOSE : Technical implementation plan describing how the system is built.\nANALYZE : Source folder structure, module boundaries, API contracts, test suite layout, CI/CD configs, migration files, infrastructure-as-code.\nPRODUCE :\n  - system-design.md       : Component design: classes, modules, interfaces, DB tables, API routes with method and payload.\n  - data-flow.md           : How data moves through the system end-to-end per feature.\n  - api-contracts.md       : All API endpoints: path, method, request schema, response schema, auth requirements.\n  - infrastructure.md      : Deployment topology, cloud services, container setup, environment tiers.\n  - testing-strategy.md    : Existing test coverage, frameworks, what to add next.\n  - tech-debt.md           : Known hacks, TODOs, deprecated patterns, security issues.\n  - migration-plan.md      : DB migrations present; suggested future migration steps.\n  - sequence-diagrams.puml : PlantUML sequence diagrams for the top 3-5 critical flows.\nFILE FORMAT: .md for prose, .puml for diagrams. Use code blocks for schemas and examples.\n\n--- 5. ready-to-build ---\nPURPOSE : Prioritized task list of planned tasks. Left EMPTY during onboarding.\nPRODUCE : Nothing. Do not create any files in this folder.\nREASON  : No tasks have been planned yet for this project. The team will populate this section manually after reviewing the knowledge-base, prd, design, and engineering-plan artifacts.\n\n--- 6. build ---\nPURPOSE : The complete existing codebase copied verbatim — this is the working source of truth.\nANALYZE : Every source file in the existing project.\nPRODUCE :\n  - Copy the ENTIRE codebase AS-IS into the build/ subfolder, preserving the full original directory structure and all file names exactly.\n  - Do NOT modify, summarise, or filter any source file — copy byte-for-byte.\n  - Preserve ALL file extensions exactly as they are in the original project.\n  - The only files to OMIT are: node_modules/, .git/, build/dist/out output dirs, compiled artefacts (.class, .pyc, __pycache__), and binary/media assets (.png, .jpg, .gif, .svg, .ico, .woff, .ttf, .mp4, .zip, .tar).\n  - DO include: all source code, config files, scripts, SQL, Dockerfiles, CI configs, .env.example, lock files (package-lock.json, pnpm-lock.yaml, etc.).\n  - Add a build-notes.md at the root of build/ listing: total files copied, any files intentionally omitted and why, and the original project root path.\nFILE FORMAT: every file keeps its original extension. build-notes.md in Markdown.\n\n=== GLOBAL RULES ===\n1. Use EXACT subfolder names: knowledge-base, prd, design, engineering-plan, ready-to-build, build.\n2. Every .md file must start with a # H1 heading matching the file purpose.\n3. Every .html file must be a complete self-contained HTML5 document.\n4. Every .puml file must start with @startuml and end with @enduml.\n5. Never use placeholder text. If information cannot be found, write: Not found in codebase.\n6. Be thorough. More detail is better than less.\n7. Cross-reference between files where relevant (e.g. see prd/features.md).\n\n=== OUTPUT REQUIREMENT ===\nProduce a single local folder containing exactly the six section subfolders above with all files populated.\nWhen done, provide the absolute path to that folder so it can be imported into Scaffold.",
-          "markdownDescription": "Template used by **Onboard Existing Project**. Supported tokens: `{{workspaceRootPath}}`, `{{projectName}}`, `{{projectId}}`, `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{readyToBuildPath}}`, `{{buildPath}}`."
-        },
-        "scaffold.onboardPromptOutput": {
-          "type": "string",
-          "enum": [
-            "editor",
-            "clipboard",
-            "both"
-          ],
-          "default": "both",
-          "description": "Where generated onboarding prompts are sent."
+          "description": "Where generated Code prompts are sent."
         }
       }
     }

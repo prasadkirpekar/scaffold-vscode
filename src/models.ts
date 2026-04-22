@@ -12,14 +12,6 @@ export interface SectionDefinition {
   hasGate: boolean;
 }
 
-export interface ProjectMeta {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  status: "active" | "completed";
-}
-
 export interface SectionState {
   section: SectionKey;
   status: SectionStatus;
@@ -103,8 +95,8 @@ export const SECTIONS: SectionDefinition[] = [
   },
   {
     key: "readyToBuild",
-    label: "Ready to Build",
-    folderName: "ready-to-build",
+    label: "Ready to Code",
+    folderName: "ready-to-code",
     viewId: "scaffold.readyToBuild",
     supportedFileExtensions: [".md"],
     defaultFileExtension: ".md",
@@ -112,8 +104,8 @@ export const SECTIONS: SectionDefinition[] = [
   },
   {
     key: "build",
-    label: "Build",
-    folderName: "build",
+    label: "Code",
+    folderName: "code",
     viewId: "scaffold.build",
     supportedFileExtensions: [
       ".md",

@@ -64,8 +64,8 @@ exports.SECTIONS = [
     },
     {
         key: "readyToBuild",
-        label: "Ready to Build",
-        folderName: "ready-to-build",
+        label: "Ready to Code",
+        folderName: "ready-to-code",
         viewId: "scaffold.readyToBuild",
         supportedFileExtensions: [".md"],
         defaultFileExtension: ".md",
@@ -73,8 +73,8 @@ exports.SECTIONS = [
     },
     {
         key: "build",
-        label: "Build",
-        folderName: "build",
+        label: "Code",
+        folderName: "code",
         viewId: "scaffold.build",
         supportedFileExtensions: [
             ".md",

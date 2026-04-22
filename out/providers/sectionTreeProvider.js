@@ -104,14 +104,9 @@ class SectionTreeProvider {
     section;
     onDidChangeTreeDataEmitter = new vscode.EventEmitter();
     onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
-    activeProjectId = null;
     constructor(storage, section) {
         this.storage = storage;
         this.section = section;
-    }
-    setActiveProject(projectId) {
-        this.activeProjectId = projectId;
-        this.refresh();
     }
     refresh() {
         this.onDidChangeTreeDataEmitter.fire(undefined);
@@ -120,27 +115,24 @@ class SectionTreeProvider {
         return element;
     }
     async getChildren(element) {
-        if (!this.activeProjectId) {
-            return [];
-        }
         if (!element) {
-            const rootEntries = await this.toNodeItems(this.activeProjectId, this.section);
+            const rootEntries = await this.toNodeItems(this.section);
             if (!this.storage.sectionHasGate(this.section)) {
                 return rootEntries;
             }
-            const state = await this.storage.getSectionState(this.activeProjectId, this.section);
-            const summary = await this.storage.getSectionApprovalSummary(this.activeProjectId, this.section);
+            const state = await this.storage.getSectionState(this.section);
+            const summary = await this.storage.getSectionApprovalSummary(this.section);
             const summaryText = `${summary.approvedFiles}/${summary.totalFiles} files approved`;
             const gate = new SectionGateItem(this.section, this.storage.getSectionDefinition(this.section).label, state, summaryText);
             return [gate, ...rootEntries];
         }
         if (element instanceof SectionNodeItem && element.isDirectory) {
-            return this.toNodeItems(this.activeProjectId, this.section, element.uri);
+            return this.toNodeItems(this.section, element.uri);
         }
         return [];
     }
-    async toNodeItems(projectId, section, dirUri) {
-        const entries = await this.storage.listSectionEntries(projectId, section, dirUri);
+    async toNodeItems(section, dirUri) {
+        const entries = await this.storage.listSectionEntries(section, dirUri);
         const mapped = [];
         for (const entry of entries) {
             const isDirectory = entry.type === vscode.FileType.Directory;
@@ -148,7 +140,7 @@ class SectionTreeProvider {
                 continue;
             }
             const requiresApproval = this.storage.sectionHasGate(section);
-            const approved = !requiresApproval || isDirectory ? false : await this.storage.isFileApproved(projectId, section, entry.uri);
+            const approved = !requiresApproval || isDirectory ? false : await this.storage.isFileApproved(section, entry.uri);
             mapped.push(new SectionNodeItem(entry.uri, section, isDirectory, approved, requiresApproval));
         }
         return mapped;
