@@ -2,15 +2,17 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import {
   ScaffoldConfig,
-  FileApprovals,
+  FileStateMap,
   SectionKey,
-  SectionState,
   SECTIONS
 } from "./models";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const BUILD_MANUAL_LOG_FILE = "manual-change-log.md";
+const TASK_BACKLOG_FILE = "backlog.md";
+
+// Sections that are always accessible without requiring previous section progress
+const ALWAYS_ACCESSIBLE: SectionKey[] = ["knowledgeBase", "prd"];
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -26,10 +28,6 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function normalizeName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 function toTitle(value: string): string {
   const base = value.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
   if (!base) {
@@ -39,6 +37,10 @@ function toTitle(value: string): string {
     .split(/\s+/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export class ScaffoldStorage {
@@ -51,8 +53,7 @@ export class ScaffoldStorage {
   public getConfig(): ScaffoldConfig {
     const cfg = vscode.workspace.getConfiguration("scaffold", this.workspaceFolder.uri);
     const dataFolder = cfg.get<string>("dataFolder", ".scaffold");
-    const gateMode = cfg.get<"strict" | "flexible">("gateMode", "strict");
-    return { dataFolder, gateMode };
+    return { dataFolder };
   }
 
   public getDataRootUri(): vscode.Uri {
@@ -64,35 +65,25 @@ export class ScaffoldStorage {
     return vscode.Uri.joinPath(this.getDataRootUri(), "sections");
   }
 
-  public getSectionsStateUri(): vscode.Uri {
-    return vscode.Uri.joinPath(this.getDataRootUri(), "sections.json");
-  }
-
   /**
    * Returns the workspace path for section content files.
-   * Planning sections live under .scaffold/sections while Code maps to the workspace root.
+   * All planning sections live under .scaffold/sections.
    */
   public getSectionRootUri(section: SectionKey): vscode.Uri {
     const def = this.getSectionDefinition(section);
-    if (section === "build") {
-      return this.workspaceFolder.uri;
-    }
     return vscode.Uri.joinPath(this.getSectionsRootUri(), def.folderName);
   }
 
-  public getSectionApprovalsUri(section: SectionKey): vscode.Uri {
-    return vscode.Uri.joinPath(this.getDataRootUri(), ".approvals", `${section}.json`);
-  }
-
   public getSectionIndexUri(section: SectionKey): vscode.Uri {
-    if (section === "build") {
-      return vscode.Uri.joinPath(this.getDataRootUri(), "build-index.md");
-    }
     return vscode.Uri.joinPath(this.getSectionRootUri(section), "index.md");
   }
 
-  public getBuildManualLogUri(): vscode.Uri {
-    return vscode.Uri.joinPath(this.getDataRootUri(), BUILD_MANUAL_LOG_FILE);
+  public getSectionStatesUri(section: SectionKey): vscode.Uri {
+    return vscode.Uri.joinPath(this.getDataRootUri(), ".states", `${section}.json`);
+  }
+
+  public getTaskBacklogUri(): vscode.Uri {
+    return vscode.Uri.joinPath(this.getSectionRootUri("readyToBuild"), TASK_BACKLOG_FILE);
   }
 
   public async isInitialized(): Promise<boolean> {
@@ -106,33 +97,18 @@ export class ScaffoldStorage {
 
   public async initialize(): Promise<void> {
     const dataRoot = this.getDataRootUri();
-    const approvalsDir = vscode.Uri.joinPath(dataRoot, ".approvals");
+    const statesDir = vscode.Uri.joinPath(dataRoot, ".states");
 
     await this.ensureDir(dataRoot);
-    await this.ensureDir(approvalsDir);
+    await this.ensureDir(statesDir);
     await this.ensureDir(this.getSectionsRootUri());
 
-    // Planning section folders live in .scaffold/sections; Code uses the workspace root.
     for (const section of SECTIONS) {
-      if (section.key !== "build") {
-        await this.ensureDir(this.getSectionRootUri(section.key));
-      }
-    }
+      await this.ensureDir(this.getSectionRootUri(section.key));
 
-    // Only write defaults if sections.json does not exist yet
-    if (!(await this.readFile(this.getSectionsStateUri()))) {
-      await this.writeJson(this.getSectionsStateUri(), this.buildDefaultSectionStates());
-    }
-
-    for (const section of SECTIONS) {
-      const approvalsUri = this.getSectionApprovalsUri(section.key);
-      if (!(await this.readFile(approvalsUri))) {
-        await this.writeJson(approvalsUri, {});
-      }
-
-      if (section.key === "build") {
-        await this.syncSectionIndex(section.key);
-        continue;
+      const statesUri = this.getSectionStatesUri(section.key);
+      if (!(await this.readFile(statesUri))) {
+        await this.writeJson(statesUri, {});
       }
 
       const sectionRoot = this.getSectionRootUri(section.key);
@@ -140,158 +116,175 @@ export class ScaffoldStorage {
       const starter = vscode.Uri.joinPath(sectionRoot, overviewFile);
       if (!(await this.readFile(starter))) {
         await this.writeFile(starter, this.getStarterContent(section.key, overviewFile));
+        const states = await this.getFileStates(section.key);
+        states[overviewFile] = { status: "editing" };
+        await this.writeJson(this.getSectionStatesUri(section.key), states);
         await this.syncSectionIndex(section.key, { [overviewFile]: `${section.label} overview` });
       } else {
         await this.syncSectionIndex(section.key);
       }
     }
 
-    await this.appendBuildManualChangeLog("Code section initialized.");
+    await this.syncTaskBacklog();
     await this.appendActivity("Workspace initialized.");
   }
 
-  public async listSectionStates(): Promise<SectionState[]> {
-    const defaultStates = this.buildDefaultSectionStates();
-    const states = await this.readJson<SectionState[]>(this.getSectionsStateUri());
-    if (!states) {
-      return defaultStates;
-    }
-
-    return SECTIONS.map((section) => {
-      const fallback = defaultStates.find((state) => state.section === section.key) as SectionState;
-      const found = states.find((state) => state.section === section.key);
-      if (found) {
-        if (!section.hasGate) {
-          return { ...found, status: "APPROVED" };
-        }
-        return found;
-      }
-      return fallback;
-    });
+  public async getFileStates(section: SectionKey): Promise<FileStateMap> {
+    const states = await this.readJson<FileStateMap>(this.getSectionStatesUri(section));
+    return states ?? {};
   }
 
-  public async getSectionState(section: SectionKey): Promise<SectionState> {
-    const states = await this.listSectionStates();
-    return states.find((state) => state.section === section) as SectionState;
-  }
-
-  public async isSectionEditable(section: SectionKey): Promise<boolean> {
-    if (!this.sectionHasGate(section)) {
-      return true;
+  public async isFileFinalized(section: SectionKey, fileUri: vscode.Uri): Promise<boolean> {
+    if (!this.isSupportedSectionFilePath(section, fileUri.path)) {
+      return false;
     }
-    const state = await this.getSectionState(section);
-    return state.status !== "LOCKED";
-  }
-
-  public async getSectionApprovalSummary(
-    section: SectionKey
-  ): Promise<{ totalFiles: number; approvedFiles: number; allApproved: boolean }> {
-    const files = await this.listAllSectionFileRelativePaths(section);
-    const approvals = await this.readApprovals(section);
-    const approvedFiles = files.filter((file) => Boolean(approvals[file])).length;
-
-    return {
-      totalFiles: files.length,
-      approvedFiles,
-      allApproved: files.length > 0 && files.length === approvedFiles
-    };
-  }
-
-  public async approveSection(section: SectionKey, comment: string | null): Promise<void> {
-    if (!this.sectionHasGate(section)) {
-      throw new Error("This section does not require approval.");
-    }
-
-    const states = await this.listSectionStates();
-    const state = states.find((s) => s.section === section);
-
-    if (!state) {
-      throw new Error("Section state not found.");
-    }
-
-    if (state.status === "LOCKED") {
-      throw new Error("Section is locked.");
-    }
-
-    if (state.status === "APPROVED") {
-      return;
-    }
-
-    const summary = await this.getSectionApprovalSummary(section);
-    if (!summary.allApproved) {
-      throw new Error(`All files in ${this.getSectionDefinition(section).label} must be approved first.`);
-    }
-
-    state.status = "APPROVED";
-    state.comment = comment;
-    state.approvedAt = nowIso();
-    state.updatedAt = nowIso();
-
-    const gatedSections = SECTIONS.filter((s) => s.hasGate);
-    const currentIndex = gatedSections.findIndex((s) => s.key === section);
-    const next = gatedSections[currentIndex + 1];
-    if (next) {
-      const nextState = states.find((s) => s.section === next.key);
-      if (nextState && nextState.status === "LOCKED") {
-        nextState.status = "PENDING_REVIEW";
-        nextState.updatedAt = nowIso();
-      }
-    }
-
-    await this.writeJson(this.getSectionsStateUri(), states);
-    await this.appendActivity(`${this.getSectionDefinition(section).label} section approved`);
-  }
-
-  public async approveFile(
-    section: SectionKey,
-    fileUri: vscode.Uri,
-    comment: string | null
-  ): Promise<void> {
-    if (!this.sectionHasGate(section)) {
-      throw new Error("This section does not require file approval.");
-    }
-
-    const editable = await this.isSectionEditable(section);
-    if (!editable) {
-      throw new Error("Section is locked.");
-    }
-
     const sectionRoot = this.getSectionRootUri(section);
     const relativePath = path.posix.relative(sectionRoot.path, fileUri.path);
-    if (!relativePath || relativePath.startsWith("..") || !this.isSupportedSectionFilePath(section, relativePath)) {
-      throw new Error("Only supported files within the section can be approved.");
+    if (!relativePath || relativePath.startsWith("..")) {
+      return false;
     }
-
-    const approvals = await this.readApprovals(section);
-    approvals[relativePath] = {
-      approvedAt: nowIso(),
-      comment
-    };
-    await this.writeJson(this.getSectionApprovalsUri(section), approvals);
-    await this.appendActivity(`${this.getSectionDefinition(section).label} file approved: ${relativePath}`);
+    const states = await this.getFileStates(section);
+    return states[relativePath]?.status === "finalized";
   }
 
-  public async unlockSection(section: SectionKey): Promise<void> {
-    if (!this.sectionHasGate(section)) {
-      throw new Error("This section does not require unlock.");
+  public async finalizeFile(section: SectionKey, fileUri: vscode.Uri): Promise<void> {
+    if (!this.isSupportedSectionFilePath(section, fileUri.path)) {
+      throw new Error("Only supported files can be finalized.");
+    }
+    const sectionRoot = this.getSectionRootUri(section);
+    const relativePath = path.posix.relative(sectionRoot.path, fileUri.path);
+    if (!relativePath || relativePath.startsWith("..")) {
+      throw new Error("File is outside section root.");
+    }
+    const states = await this.getFileStates(section);
+    states[relativePath] = { status: "finalized", finalizedAt: nowIso() };
+    await this.writeJson(this.getSectionStatesUri(section), states);
+    await this.syncSectionIndex(section);
+    await this.appendActivity(`${this.getSectionDefinition(section).label} file finalized: ${relativePath}`);
+  }
+
+  public async createFileRevision(section: SectionKey, fileUri: vscode.Uri): Promise<vscode.Uri> {
+    if (!this.isSupportedSectionFilePath(section, fileUri.path)) {
+      throw new Error("Only supported files can have revisions created.");
+    }
+    const sectionRoot = this.getSectionRootUri(section);
+    const relativePath = path.posix.relative(sectionRoot.path, fileUri.path);
+    if (!relativePath || relativePath.startsWith("..")) {
+      throw new Error("File is outside section root.");
     }
 
-    const cfg = this.getConfig();
-    if (cfg.gateMode !== "flexible") {
-      throw new Error("Manual unlock is only allowed in flexible mode.");
+    const ext = path.posix.extname(fileUri.path);
+    const baseName = path.posix.basename(fileUri.path, ext);
+    const parentPath = path.posix.dirname(fileUri.path);
+    const parentUri = fileUri.with({ path: parentPath });
+
+    // Extract core base name, stripping any existing _v{n} suffix
+    const versionMatch = baseName.match(/^(.+?)_v(\d+)$/);
+    const coreBase = versionMatch ? versionMatch[1] : baseName;
+
+    // Find next available version number
+    let version = 2;
+    let candidateUri: vscode.Uri;
+    while (true) {
+      const candidateName = `${coreBase}_v${version}${ext}`;
+      candidateUri = vscode.Uri.joinPath(parentUri, candidateName);
+      try {
+        await vscode.workspace.fs.stat(candidateUri);
+        version++;
+      } catch {
+        break;
+      }
     }
 
-    const states = await this.listSectionStates();
-    const state = states.find((s) => s.section === section);
-    if (!state) {
-      throw new Error("Section state not found.");
+    const originalContent = await this.readFile(fileUri) ?? "";
+    await this.writeFile(candidateUri, originalContent);
+
+    const newRelativePath = path.posix.relative(sectionRoot.path, candidateUri.path);
+    const states = await this.getFileStates(section);
+    states[newRelativePath] = { status: "editing" };
+    await this.writeJson(this.getSectionStatesUri(section), states);
+
+    await this.syncSectionIndex(section);
+    if (this.getSectionDefinition(section).isBacklogSection) {
+      await this.syncTaskBacklog();
+    }
+    await this.appendActivity(`${this.getSectionDefinition(section).label} file revision created: ${newRelativePath}`);
+    return candidateUri;
+  }
+
+  public async getSectionProgress(section: SectionKey): Promise<{ finalized: number; total: number }> {
+    const states = await this.getFileStates(section);
+    const entries = Object.values(states);
+    const finalized = entries.filter((e) => e.status === "finalized").length;
+    return { finalized, total: entries.length };
+  }
+
+  public async isSectionAccessible(section: SectionKey): Promise<boolean> {
+    if (ALWAYS_ACCESSIBLE.includes(section)) {
+      return true;
+    }
+    const sectionIndex = SECTIONS.findIndex((s) => s.key === section);
+    if (sectionIndex <= 0) {
+      return true;
+    }
+    const previousSection = SECTIONS[sectionIndex - 1].key;
+    const progress = await this.getSectionProgress(previousSection);
+    return progress.finalized >= 1;
+  }
+
+  public async syncTaskBacklog(): Promise<void> {
+    const backlogUri = this.getTaskBacklogUri();
+    const files = (await this.listAllSectionFileRelativePaths("readyToBuild")).sort((a, b) => a.localeCompare(b));
+
+    // Preserve existing done markers
+    const existingDone = new Set<string>();
+    const existingContent = await this.readFile(backlogUri);
+    if (existingContent) {
+      for (const line of existingContent.split(/\r?\n/)) {
+        const match = line.match(/^- \[x\] \[([^\]]+)\]/);
+        if (match) {
+          existingDone.add(match[1]);
+        }
+      }
     }
 
-    if (state.status === "LOCKED") {
-      state.status = "PENDING_REVIEW";
-      state.updatedAt = nowIso();
-      await this.writeJson(this.getSectionsStateUri(), states);
-      await this.appendActivity(`${this.getSectionDefinition(section).label} manually unlocked`);
+    const descriptions = await this.readSectionIndexDescriptions("readyToBuild");
+    const lines: string[] = [];
+    lines.push("# Task Plan Backlog");
+    lines.push("");
+    lines.push("Track task completion. Check off tasks as they are implemented.");
+    lines.push("");
+
+    if (files.length === 0) {
+      lines.push("_No tasks yet._");
+    } else {
+      for (const file of files) {
+        const done = existingDone.has(file);
+        const desc = descriptions[file]?.trim();
+        const check = done ? "[x]" : "[ ]";
+        lines.push(desc ? `- ${check} [${file}](./${file}) - ${desc}` : `- ${check} [${file}](./${file})`);
+      }
+    }
+
+    lines.push("");
+    await this.writeFile(backlogUri, lines.join("\n"));
+  }
+
+  public async markTaskDone(section: SectionKey, fileUri: vscode.Uri): Promise<void> {
+    const sectionRoot = this.getSectionRootUri(section);
+    const relativePath = path.posix.relative(sectionRoot.path, fileUri.path);
+    const backlogUri = this.getTaskBacklogUri();
+    const content = await this.readFile(backlogUri);
+    if (!content) {
+      return;
+    }
+    const updated = content.replace(
+      new RegExp(`(- )\\[ \\] (\\[${escapeRegExp(relativePath)}\\])`, "g"),
+      "$1[x] $2"
+    );
+    if (updated !== content) {
+      await this.writeFile(backlogUri, updated);
+      await this.appendActivity(`Task marked done: ${relativePath}`);
     }
   }
 
@@ -301,9 +294,9 @@ export class ScaffoldStorage {
     pageName: string,
     description?: string | null
   ): Promise<vscode.Uri> {
-    const editable = await this.isSectionEditable(section);
-    if (!editable) {
-      throw new Error("Section is locked until previous section is approved.");
+    const accessible = await this.isSectionAccessible(section);
+    if (!accessible) {
+      throw new Error("Section is not yet accessible. Finalize at least one file in the previous section first.");
     }
 
     const root = this.getSectionRootUri(section);
@@ -316,7 +309,15 @@ export class ScaffoldStorage {
 
     await this.writeFile(pageUri, this.getNewFileTemplate(section, safeName, title));
     const relativePath = path.posix.relative(root.path, pageUri.path);
+
+    const states = await this.getFileStates(section);
+    states[relativePath] = { status: "editing" };
+    await this.writeJson(this.getSectionStatesUri(section), states);
+
     await this.syncSectionIndex(section, { [relativePath]: description?.trim() || `${title}` });
+    if (this.getSectionDefinition(section).isBacklogSection) {
+      await this.syncTaskBacklog();
+    }
     await this.appendActivity(`${this.getSectionDefinition(section).label} file created: ${safeName}`);
     return pageUri;
   }
@@ -326,9 +327,9 @@ export class ScaffoldStorage {
     relativeDir: string,
     folderName: string
   ): Promise<vscode.Uri> {
-    const editable = await this.isSectionEditable(section);
-    if (!editable) {
-      throw new Error("Section is locked until previous section is approved.");
+    const accessible = await this.isSectionAccessible(section);
+    if (!accessible) {
+      throw new Error("Section is not yet accessible. Finalize at least one file in the previous section first.");
     }
 
     const root = this.getSectionRootUri(section);
@@ -348,28 +349,22 @@ export class ScaffoldStorage {
     itemUri: vscode.Uri,
     newName: string
   ): Promise<void> {
-    const editable = await this.isSectionEditable(section);
-    if (!editable) {
-      throw new Error("Section is locked. Approve the previous section first.");
-    }
-
     const safeNewName = this.toRenamedItemName(section, itemUri, newName);
-
     const parentPath = path.posix.dirname(itemUri.path);
     const newUri = itemUri.with({ path: `${parentPath}/${safeNewName}` });
 
     await vscode.workspace.fs.rename(itemUri, newUri, { overwrite: false });
 
-    // Update approvals if it's a file
     if (this.isSupportedSectionFilePath(section, itemUri.path)) {
       const sectionRoot = this.getSectionRootUri(section);
       const oldRelative = path.posix.relative(sectionRoot.path, itemUri.path);
       const newRelative = path.posix.relative(sectionRoot.path, newUri.path);
-      const approvals = await this.readApprovals(section);
-      if (approvals[oldRelative]) {
-        approvals[newRelative] = approvals[oldRelative];
-        delete approvals[oldRelative];
-        await this.writeJson(this.getSectionApprovalsUri(section), approvals);
+
+      const states = await this.getFileStates(section);
+      if (states[oldRelative]) {
+        states[newRelative] = states[oldRelative];
+        delete states[oldRelative];
+        await this.writeJson(this.getSectionStatesUri(section), states);
       }
 
       const descriptions = await this.readSectionIndexDescriptions(section);
@@ -382,6 +377,9 @@ export class ScaffoldStorage {
       await this.syncSectionIndex(section);
     }
 
+    if (this.getSectionDefinition(section).isBacklogSection) {
+      await this.syncTaskBacklog();
+    }
     await this.appendActivity(`${this.getSectionDefinition(section).label} item renamed to: ${safeNewName}`);
   }
 
@@ -390,47 +388,32 @@ export class ScaffoldStorage {
     itemUri: vscode.Uri,
     isDirectory: boolean
   ): Promise<void> {
-    const editable = await this.isSectionEditable(section);
-    if (!editable) {
-      throw new Error("Section is locked. Approve the previous section first.");
-    }
-
     await vscode.workspace.fs.delete(itemUri, { recursive: isDirectory, useTrash: true });
 
-    // Clean up approvals
     const sectionRoot = this.getSectionRootUri(section);
-    const approvals = await this.readApprovals(section);
+    const states = await this.getFileStates(section);
     const itemRelative = path.posix.relative(sectionRoot.path, itemUri.path);
 
     let changed = false;
-    for (const key of Object.keys(approvals)) {
+    for (const key of Object.keys(states)) {
       if (key === itemRelative || key.startsWith(`${itemRelative}/`)) {
-        delete approvals[key];
+        delete states[key];
         changed = true;
       }
     }
 
     if (changed) {
-      await this.writeJson(this.getSectionApprovalsUri(section), approvals);
+      await this.writeJson(this.getSectionStatesUri(section), states);
     }
 
     await this.syncSectionIndex(section);
 
+    if (this.getSectionDefinition(section).isBacklogSection) {
+      await this.syncTaskBacklog();
+    }
+
     const label = path.posix.basename(itemUri.path);
     await this.appendActivity(`${this.getSectionDefinition(section).label} item deleted: ${label}`);
-  }
-
-  public async appendBuildManualChangeLog(message: string): Promise<void> {
-    const logUri = this.getBuildManualLogUri();
-    const ts = nowIso();
-    const line = `- ${ts} - ${message}`;
-
-    const existing = await this.readFile(logUri);
-    const content = existing
-      ? `${existing.trimEnd()}\n${line}\n`
-      : `# Code Manual Change Log\n\nTracks manual edit/delete actions in the Code section.\n\n${line}\n`;
-
-    await this.writeFile(logUri, content);
   }
 
   public async appendActivity(message: string): Promise<void> {
@@ -452,7 +435,6 @@ export class ScaffoldStorage {
     const hiddenFolderName = this.getConfig().dataFolder;
 
     return entries
-      .filter(([name]) => !(section === "build" && name === hiddenFolderName))
       .map(([name, type]) => ({ uri: vscode.Uri.joinPath(root, name), type }))
       .sort((a, b) => {
         if (a.type !== b.type) {
@@ -460,21 +442,6 @@ export class ScaffoldStorage {
         }
         return path.basename(a.uri.path).localeCompare(path.basename(b.uri.path));
       });
-  }
-
-  public async isFileApproved(section: SectionKey, fileUri: vscode.Uri): Promise<boolean> {
-    if (!this.isSupportedSectionFilePath(section, fileUri.path)) {
-      return false;
-    }
-
-    const sectionRoot = this.getSectionRootUri(section);
-    const relativePath = path.posix.relative(sectionRoot.path, fileUri.path);
-    if (!relativePath || relativePath.startsWith("..")) {
-      return false;
-    }
-
-    const approvals = await this.readApprovals(section);
-    return Boolean(approvals[relativePath]);
   }
 
   public getRelativePathInSection(section: SectionKey, itemUri: vscode.Uri): string {
@@ -485,10 +452,6 @@ export class ScaffoldStorage {
 
   public getSectionDefinition(section: SectionKey) {
     return SECTIONS.find((s) => s.key === section) as (typeof SECTIONS)[number];
-  }
-
-  public sectionHasGate(section: SectionKey): boolean {
-    return this.getSectionDefinition(section).hasGate;
   }
 
   public getSupportedFileExtensions(section: SectionKey): string[] {
@@ -534,15 +497,16 @@ export class ScaffoldStorage {
       for (const [name, type] of entries) {
         const child = vscode.Uri.joinPath(dirUri, name);
         if (type === vscode.FileType.Directory) {
-          if (section === "build" && dirUri.fsPath === root.fsPath && name === hiddenFolderName) {
-            continue;
-          }
           await walk(child);
           continue;
         }
         if (type === vscode.FileType.File && this.isSupportedSectionFilePath(section, name)) {
           const relativePath = path.posix.relative(root.path, child.path);
-          if (relativePath.toLowerCase() === "index.md" || (section === "build" && relativePath.toLowerCase() === BUILD_MANUAL_LOG_FILE)) {
+          const lowerRelative = relativePath.toLowerCase();
+          if (lowerRelative === "index.md") {
+            continue;
+          }
+          if (section === "readyToBuild" && lowerRelative === TASK_BACKLOG_FILE) {
             continue;
           }
           output.push(relativePath);
@@ -552,11 +516,6 @@ export class ScaffoldStorage {
 
     await walk(root);
     return output;
-  }
-
-  private async readApprovals(section: SectionKey): Promise<FileApprovals> {
-    const approvals = await this.readJson<FileApprovals>(this.getSectionApprovalsUri(section));
-    return approvals ?? {};
   }
 
   private async ensureDir(uri: vscode.Uri): Promise<void> {
@@ -593,23 +552,11 @@ export class ScaffoldStorage {
     await vscode.workspace.fs.writeFile(uri, encoder.encode(content));
   }
 
-  private buildDefaultSectionStates(): SectionState[] {
-    const firstGatedSection = SECTIONS.find((section) => section.hasGate)?.key;
-
-    return SECTIONS.map((section) => ({
-      section: section.key,
-      status: !section.hasGate ? "APPROVED" : section.key === firstGatedSection ? "PENDING_REVIEW" : "LOCKED",
-      approvedAt: null,
-      comment: null,
-      updatedAt: nowIso()
-    }));
-  }
-
   private getStarterContent(section: SectionKey, fileName: string): string {
     const ext = path.posix.extname(fileName).toLowerCase();
 
     if (section === "readyToBuild") {
-      return "# Ready to Code\n\n> This section is auto-generated by Copilot once Engineering Plan is approved.\n";
+      return "# Task Plan\n\n> Add task files to this section. Use the Generate Task Plan Prompt to have Copilot create tasks from your Engineering Plan.\n";
     }
 
     if (ext === ".html") {

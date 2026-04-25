@@ -32,8 +32,7 @@ exports.SECTIONS = [
             ".ini",
             ".env"
         ],
-        defaultFileExtension: ".md",
-        hasGate: false
+        defaultFileExtension: ".md"
     },
     {
         key: "prd",
@@ -41,17 +40,15 @@ exports.SECTIONS = [
         folderName: "prd",
         viewId: "scaffold.prd",
         supportedFileExtensions: [".md"],
-        defaultFileExtension: ".md",
-        hasGate: true
+        defaultFileExtension: ".md"
     },
     {
         key: "design",
-        label: "Design",
+        label: "UI Design",
         folderName: "design",
         viewId: "scaffold.design",
         supportedFileExtensions: [".html"],
-        defaultFileExtension: ".html",
-        hasGate: true
+        defaultFileExtension: ".html"
     },
     {
         key: "engineeringPlan",
@@ -59,50 +56,16 @@ exports.SECTIONS = [
         folderName: "engineering-plan",
         viewId: "scaffold.engineeringPlan",
         supportedFileExtensions: [".md", ".puml"],
-        defaultFileExtension: ".md",
-        hasGate: true
+        defaultFileExtension: ".md"
     },
     {
         key: "readyToBuild",
-        label: "Ready to Code",
+        label: "Task Plan",
         folderName: "ready-to-code",
         viewId: "scaffold.readyToBuild",
         supportedFileExtensions: [".md"],
         defaultFileExtension: ".md",
-        hasGate: true
-    },
-    {
-        key: "build",
-        label: "Code",
-        folderName: "code",
-        viewId: "scaffold.build",
-        supportedFileExtensions: [
-            ".md",
-            ".txt",
-            ".html",
-            ".css",
-            ".js",
-            ".jsx",
-            ".ts",
-            ".tsx",
-            ".json",
-            ".yaml",
-            ".yml",
-            ".xml",
-            ".csv",
-            ".puml",
-            ".py",
-            ".java",
-            ".go",
-            ".rs",
-            ".sh",
-            ".sql",
-            ".toml",
-            ".ini",
-            ".env"
-        ],
-        defaultFileExtension: ".md",
-        hasGate: false
+        isBacklogSection: true
     }
 ];
 //# sourceMappingURL=models.js.map

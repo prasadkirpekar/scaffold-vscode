@@ -1,44 +1,47 @@
 # Scaffold: Local-First Project Planning and Execution in VS Code
 
-Scaffold is a VS Code extension for local-first software planning workflows. It helps individual developers organize workspace knowledge, map requirements clearly, and move from discovery to implementation with gated sections:
+Scaffold is a VS Code extension for local-first software planning workflows. It helps individual developers organize workspace knowledge, map requirements clearly, and move from discovery to implementation with a state machine workflow:
 
-- Knowledge Base
-- Product Requirement Document (PRD)
-- Design
-- Engineering Plan
-- Ready to Code
-- Code
+- **Knowledge Base** - capture domain context and constraints
+- **Product Requirement Document (PRD)** - define features and user stories
+- **UI Design** - specify interactions and visual hierarchy
+- **Engineering Plan** - detail technical architecture and approach
+- **Task Plan** - break work into executable tasks and track progress
 
 All content is stored as regular Markdown and JSON files inside your workspace, making it easy to version in Git and edit with any tool.
 
 ## Why Scaffold
 
-- Local-first: your docs and workflow state stay in your repository.
-- Structured planning: section-by-section workflow with approval gates.
-- AI-friendly: map requirements and knowledge so AI coding assistants stay on track.
-- GitHub-friendly: plain files, no proprietary data format.
+- **Local-first**: your docs and workflow state stay in your repository—no cloud dependencies.
+- **Structured planning**: sequential 5-section workflow with file-level state tracking (editing → finalized).
+- **AI-guided**: detailed, context-aware prompts for task planning and code generation that keep AI assistants aligned with your full planning context.
+- **Git-friendly**: plain Markdown and JSON files, version control ready.
+- **Incremental refinement**: finalize files as they're ready, create revisions (_v2, _v3) to iterate without losing history.
 
 ## Works With Your AI Stack
 
 Scaffold is model-agnostic. You can pair it with GitHub Copilot, Gemini, Claude, and other AI coding assistants.
 
 - Flexible by design: choose your preferred assistant for each stage of planning and implementation.
-- Customizable prompts: tune templates for Ready-to-Code and Code to match your workflow.
+- Customizable prompts: tune templates for Task Plan and Code generation to match your workflow.
 - Context that stays grounded: Scaffold keeps project requirements, decisions, and knowledge in your workspace so AI outputs stay aligned with real project context.
 - Better continuity: move between tools without losing structure because your source of truth remains local files in your repository.
 
 ## Section Workflow
 
-Scaffold organizes planning into sequential sections:
+Scaffold organizes planning into 5 sequential sections:
 
-1. Knowledge Base
-2. Product Requirement Document
-3. Design
-4. Engineering Plan
-5. Ready to Code
-6. Code
+1. **Knowledge Base** - capture existing context and constraints
+2. **Product Requirement Document** - define features and success criteria
+3. **UI Design** - specify user interactions and design decisions
+4. **Engineering Plan** - detail implementation approach and architecture
+5. **Task Plan** - generate executable tasks and track progress
 
-Each section can contain nested files and folders. Gate approvals help enforce readiness before progressing.
+Each section unlocks when the previous section has at least one finalized file. Within sections, files can be:
+- **Editing** - in progress, editable
+- **Finalized** - read-only, versioned with auto-increment (_v2, _v3) for iterations
+
+Finalized files generate the context for AI prompts, ensuring consistent alignment with your planning decisions.
 
 ## Feature Walkthrough
 
@@ -68,33 +71,54 @@ Document UI behavior and constraints to reduce ambiguity before engineering star
 
 5. **Add Engineering Plan (Step 1)**
 
-Break requirements into actionable technical plans and implementation units.
+Detail your technical architecture and implementation approach based on requirements and design.
 
-![Add engineering plan step 1](assets/add-engineering-plan.png)
+![Add engineering plan](assets/add-engineering-plan.png)
 
-6. **Add Engineering Plan (Step 2)**
+6. **Finalize Planning Documents**
 
-Expand the plan with detailed tasks, ownership, and sequencing.
+Mark planning files as finalized when ready. This:
+- Makes files read-only (prevents accidental edits)
+- Unlocks the next section
+- Generates index.md for AI context
+
+To iterate on finalized files, use "Create Revision" to auto-generate _v2, _v3 versions.
 
 ![Add engineering plan step 2](assets/add-engineering-plan-2.png)
 
-7. **Generate Ready-to-Code Task Planning Prompt**
+7. **Generate Task Plan Prompt**
 
-Create an AI-ready prompt from approved sections to produce execution-ready tasks.
+Click "Generate Task Plan Prompt" in the Task Plan section toolbar to create an AI-ready prompt. This prompt includes:
+- Full context from all previous planning documents (Knowledge Base → Engineering Plan)
+- Instructions for breaking work into executable tasks
+- Expected output format (master backlog + detailed task files)
 
-![Ready to code prompt generation](assets/ready-to-build-generate-prompt-for-task-planning.png)
+Prompt appears in editor/clipboard for use with any AI assistant.
 
-8. **Review Generated Ready-to-Code Tasks**
+![Task plan prompt generation](assets/ready-to-build-generate-prompt-for-task-planning.png)
 
-Inspect the generated task list before moving into implementation.
+8. **Review and Refine Tasks**
 
-![Generated ready to code tasks](assets/for-ready-to-build-tasks-will-generated.png)
+Review AI-generated tasks, refine them directly in Task Plan section, and finalize when ready.
 
 9. **Generate Code Prompt**
 
-Produce a coding prompt aligned with your approved plan so implementation stays on-track.
+Click "Generate Code Prompt" in the Task Plan section toolbar to create a detailed implementation guide. This includes:
+- All planning context for reference
+- Current task backlog and priorities
+- Step-by-step implementation workflow
+- Design/architecture compliance requirements
 
-![Generated coding prompt](assets/generated-prompt-to-give-to-ai-for-code-generation.png)
+Use this prompt to guide AI coding assistants in building features.
+
+![Code prompt generation](assets/generated-prompt-to-give-to-ai-for-code-generation.png)
+
+10. **Track Progress**
+
+As tasks are completed:
+- Mark tasks as done using "Mark Task Done" action
+- Create revisions of task files as needed
+- All progress tracked in backlog.md automatically
 
 
 ## Data Layout
@@ -105,41 +129,39 @@ By default, Scaffold stores data under:
 
 Inside `.scaffold/`:
 
-- `sections.json` for section gate states
-- `.approvals/` for approval metadata
-- `build-index.md` for Code section indexing
-- `manual-change-log.md` for Code section manual file operation logs
-- `activity.jsonl` for append-only activity tracking
-- `sections/knowledge-base/` for Knowledge Base docs
-- `sections/prd/` for Product Requirement Document files
-- `sections/design/` for Design docs
-- `sections/engineering-plan/` for implementation planning docs
-- `sections/ready-to-code/` for execution-ready tasks
+- `sections/knowledge-base/` - Knowledge Base docs
+- `sections/prd/` - Product Requirement Document files
+- `sections/design/` - UI Design docs  
+- `sections/engineering-plan/` - Implementation planning docs
+- `sections/ready-to-code/` - Task Plan files and backlog
+- `.states/` - file status tracking (editing/finalized) per section
+- `*.md` - generated index files per section (auto-updated on file changes)
 
-Code files are created in your workspace root (outside `.scaffold/`) so implementation stays in your project source tree.
+**Implementation code** lives in your workspace root (outside `.scaffold/`) so all code and dependencies stay in your project source tree and version control.
+
+Each section auto-generates an `index.md` file listing all files and their current status—useful for AI context in prompts.
 
 ## Commands
 
 Key commands exposed by Scaffold:
 
 - Scaffold: Initialize Workspace
-- Scaffold: Approve Section
-- Scaffold: Approve File
-- Scaffold: Generate Ready-to-Code Prompt
-- Scaffold: Generate Code Prompt
-- Scaffold: Open Code Folder Externally
+- Scaffold: Finalize File (makes file read-only)
+- Scaffold: Create Revision (creates _v2, _v3, etc. copies)
+- Scaffold: Mark Task Done (checks off task in backlog)
+- Scaffold: Generate Task Plan Prompt (generates detailed prompt to create tasks)
+- Scaffold: Generate Code Prompt (generates detailed prompt to implement code)
 - Scaffold: Rename
 - Scaffold: Delete
 - Scaffold: Refresh
 
 ## Settings
 
-- `scaffold.gateMode`: `strict` or `flexible`
 - `scaffold.dataFolder`: data root folder name (default `.scaffold`)
-- `scaffold.readyToBuildPromptTemplate`: template for ready-to-code prompt generation
+- `scaffold.readyToBuildPromptTemplate`: template for task plan prompt generation
 - `scaffold.readyToBuildPromptOutput`: output target (`editor`, `clipboard`, `both`)
-- `scaffold.buildPromptTemplate`: template for code prompt generation
-- `scaffold.buildPromptOutput`: output target (`editor`, `clipboard`, `both`)
+- `scaffold.codePromptTemplate`: template for code implementation prompt generation
+- `scaffold.codePromptOutput`: output target (`editor`, `clipboard`, `both`)
 
 ## Local Development
 
