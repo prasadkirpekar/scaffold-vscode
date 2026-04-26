@@ -80,6 +80,19 @@ class SectionNodeItem extends vscode.TreeItem {
             title: "Open File",
             arguments: [uri]
         };
+        if (section === "readyToBuild") {
+            if (finalized) {
+                this.description = "done";
+                this.contextValue = "section.task.done";
+                this.iconPath = new vscode.ThemeIcon("check");
+            }
+            else {
+                this.description = "pending";
+                this.contextValue = "section.task.pending";
+                this.iconPath = new vscode.ThemeIcon("circle-large-outline");
+            }
+            return;
+        }
         if (finalized) {
             this.description = "finalized";
             this.contextValue = "section.file.finalized";
@@ -110,12 +123,7 @@ class SectionTreeProvider {
     }
     async getChildren(element) {
         if (!element) {
-            const accessible = await this.storage.isSectionAccessible(this.section);
-            const progress = await this.storage.getSectionProgress(this.section);
-            const def = this.storage.getSectionDefinition(this.section);
-            const progressItem = new SectionProgressItem(this.section, def.label, progress.finalized, progress.total, accessible);
-            const rootEntries = accessible ? await this.toNodeItems(this.section) : [];
-            return [progressItem, ...rootEntries];
+            return this.toNodeItems(this.section);
         }
         if (element instanceof SectionNodeItem && element.isDirectory) {
             return this.toNodeItems(this.section, element.uri);
@@ -128,10 +136,6 @@ class SectionTreeProvider {
         for (const entry of entries) {
             const isDirectory = entry.type === vscode.FileType.Directory;
             if (!isDirectory) {
-                const fileName = path.posix.basename(entry.uri.path).toLowerCase();
-                if (fileName === "index.md" || fileName === "backlog.md") {
-                    continue;
-                }
                 if (!this.storage.isSupportedSectionFilePath(section, entry.uri.path)) {
                     continue;
                 }

@@ -1,8 +1,8 @@
 {
   "name": "scaffold-vscode",
   "displayName": "Scaffold: Structured Planning for AI Coding",
-  "description": "Scaffold is a local-first VS Code extension for structured product planning and AI-guided implementation. Organize knowledge, requirements, design, and tasks with a state machine workflow (edit → finalize → execute) that keeps your codebase and AI assistants aligned.",
-  "version": "0.1.0",
+  "description": "Local-first VS Code planning workspace for knowledge, PRD, design, engineering, and task execution with AI-ready prompts, section indexes, and task tracking.",
+  "version": "0.1.1",
   "publisher": "prasadkirpekar",
   "author": {
     "name": "Prasad Kirpekar"
@@ -39,7 +39,8 @@
     "prd",
     "engineering plan",
     "knowledge base",
-    "ready to code",
+    "task plan",
+    "tasks",
     "ai coding",
     "github copilot",
     "gemini",
@@ -71,23 +72,28 @@
       "scaffold": [
         {
           "id": "scaffold.knowledgeBase",
-          "name": "Knowledge Base"
+          "name": "Knowledge Base",
+          "icon": "$(book)"
         },
         {
           "id": "scaffold.prd",
-          "name": "Product Requirement Document"
+          "name": "Product Requirement Document",
+          "icon": "$(note)"
         },
         {
           "id": "scaffold.design",
-          "name": "UI Design"
+          "name": "UI Design",
+          "icon": "$(symbol-color)"
         },
         {
           "id": "scaffold.engineeringPlan",
-          "name": "Engineering Plan"
+          "name": "Engineering Plan",
+          "icon": "$(tools)"
         },
         {
           "id": "scaffold.readyToBuild",
-          "name": "Task Plan"
+          "name": "Task Plan",
+          "icon": "$(checklist)"
         }
       ]
     },
@@ -95,27 +101,27 @@
       {
         "view": "scaffold.knowledgeBase",
         "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
-        "when": "!scaffoldInitialized"
+        "when": "!scaffold.initialized"
       },
       {
         "view": "scaffold.prd",
         "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
-        "when": "!scaffoldInitialized"
+        "when": "!scaffold.initialized"
       },
       {
         "view": "scaffold.design",
         "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
-        "when": "!scaffoldInitialized"
+        "when": "!scaffold.initialized"
       },
       {
         "view": "scaffold.engineeringPlan",
         "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
-        "when": "!scaffoldInitialized"
+        "when": "!scaffold.initialized"
       },
       {
         "view": "scaffold.readyToBuild",
         "contents": "Initialize Scaffold before using this workspace.\n[Initialize Workspace](command:scaffold.initializeWorkspace)",
-        "when": "!scaffoldInitialized"
+        "when": "!scaffold.initialized"
       }
     ],
     "commands": [
@@ -263,19 +269,19 @@
           "group": "navigation"
         },
         {
-          "command": "scaffold.createReadyToBuildFile",
-          "when": "view == scaffold.readyToBuild && scaffold.initialized",
-          "group": "navigation"
-        },
-        {
           "command": "scaffold.generateReadyToBuildPrompt",
           "when": "view == scaffold.readyToBuild && scaffold.initialized",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "scaffold.generateCodePrompt",
           "when": "view == scaffold.readyToBuild && scaffold.initialized",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "scaffold.createReadyToBuildFile",
+          "when": "view == scaffold.readyToBuild && scaffold.initialized",
+          "group": "navigation@3"
         },
         {
           "command": "scaffold.refresh",
@@ -311,17 +317,22 @@
         },
         {
           "command": "scaffold.markTaskDone",
-          "when": "viewItem =~ /section\\.file/ && view == scaffold.readyToBuild",
+          "when": "viewItem == section.task.pending && view == scaffold.readyToBuild",
+          "group": "inline@1"
+        },
+        {
+          "command": "scaffold.markTaskDone",
+          "when": "viewItem == section.task.pending && view == scaffold.readyToBuild",
           "group": "8_tasks@1"
         },
         {
           "command": "scaffold.renameItem",
-          "when": "viewItem == section.file.editing || viewItem == section.folder",
+          "when": "viewItem == section.file.editing || viewItem == section.task.pending || viewItem == section.folder",
           "group": "9_modification@1"
         },
         {
           "command": "scaffold.deleteItem",
-          "when": "viewItem == section.file.editing || viewItem == section.folder",
+          "when": "viewItem == section.file.editing || viewItem == section.file.finalized || viewItem == section.task.pending || viewItem == section.folder",
           "group": "9_modification@2"
         }
       ]
@@ -334,12 +345,12 @@
           "default": ".scaffold",
           "description": "Folder at workspace root used for Scaffold local data."
         },
-        "scaffold.readyToBuildPromptTemplate": {
+        "scaffold.tasksPromptTemplate": {
           "type": "string",
-          "default": "You are generating Task Plan implementation tasks for Scaffold.\n\nBefore generating tasks, read the index files for new additions and changes:\n- Knowledge Base index: {{knowledgeBaseIndexPath}}\n- Product Requirement Document index: {{prdIndexPath}}\n- UI Design index: {{designIndexPath}}\n- Engineering Plan index: {{engineeringPlanIndexPath}}\n\nSection roots:\n- Knowledge Base: {{knowledgeBasePath}}\n- Product Requirement Document: {{prdPath}}\n- UI Design: {{designPath}}\n- Engineering Plan: {{engineeringPlanPath}}\n- Task Plan: {{readyToBuildPath}}\n\nTask:\nGenerate executable implementation tasks and produce:\n- one master backlog file\n- multiple task files grouped by feature/epic\n- each task with id, title, description, dependencies, acceptance criteria, tests, estimate (S/M/L), and risk\n\nConstraints:\n- Do not invent features beyond source docs.\n- Add explicit Open Question tasks for ambiguities.\n- Keep tasks implementation-ready and testable.\n- Prefer incremental vertical slices.\n\nOutput:\n1) Proposed file tree under {{readyToBuildPath}}\n2) Full file contents\n3) Traceability table from tasks to source files",
-          "markdownDescription": "Template used by **Generate Task Plan Prompt**. Supported tokens: `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{readyToBuildPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{readyToBuildIndexPath}}`."
+          "default": "You are generating Task Plan implementation tasks for Scaffold.\n\nBefore generating tasks, read the index files for new additions and changes:\n- Knowledge Base index: {{knowledgeBaseIndexPath}}\n- Product Requirement Document index: {{prdIndexPath}}\n- UI Design index: {{designIndexPath}}\n- Engineering Plan index: {{engineeringPlanIndexPath}}\n\nSection roots:\n- Knowledge Base: {{knowledgeBasePath}}\n- Product Requirement Document: {{prdPath}}\n- UI Design: {{designPath}}\n- Engineering Plan: {{engineeringPlanPath}}\n- Task Plan: {{tasksPath}}\n\nTask:\nGenerate executable implementation tasks and produce:\n- one master backlog file\n- multiple task files grouped by feature/epic\n- each task with id, title, description, dependencies, acceptance criteria, tests, estimate (S/M/L), and risk\n\nConstraints:\n- Do not invent features beyond source docs.\n- Add explicit Open Question tasks for ambiguities.\n- Keep tasks implementation-ready and testable.\n- Prefer incremental vertical slices.\n\nOutput:\n1) Proposed file tree under {{tasksPath}}\n2) Full file contents\n3) Traceability table from tasks to source files",
+          "markdownDescription": "Template used by **Generate Task Plan Prompt**. Supported tokens: `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{tasksPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{tasksIndexPath}}`. Legacy `{{readyToBuildPath}}` and `{{readyToBuildIndexPath}}` tokens are still supported for backward compatibility."
         },
-        "scaffold.readyToBuildPromptOutput": {
+        "scaffold.tasksPromptOutput": {
           "type": "string",
           "enum": [
             "editor",
@@ -349,10 +360,27 @@
           "default": "both",
           "description": "Where generated Task Plan prompts are sent."
         },
+        "scaffold.readyToBuildPromptTemplate": {
+          "type": "string",
+          "default": "You are generating Task Plan implementation tasks for Scaffold.\n\nBefore generating tasks, read the index files for new additions and changes:\n- Knowledge Base index: {{knowledgeBaseIndexPath}}\n- Product Requirement Document index: {{prdIndexPath}}\n- UI Design index: {{designIndexPath}}\n- Engineering Plan index: {{engineeringPlanIndexPath}}\n\nSection roots:\n- Knowledge Base: {{knowledgeBasePath}}\n- Product Requirement Document: {{prdPath}}\n- UI Design: {{designPath}}\n- Engineering Plan: {{engineeringPlanPath}}\n- Task Plan: {{tasksPath}}\n\nTask:\nGenerate executable implementation tasks and produce:\n- one master backlog file\n- multiple task files grouped by feature/epic\n- each task with id, title, description, dependencies, acceptance criteria, tests, estimate (S/M/L), and risk\n\nConstraints:\n- Do not invent features beyond source docs.\n- Add explicit Open Question tasks for ambiguities.\n- Keep tasks implementation-ready and testable.\n- Prefer incremental vertical slices.\n\nOutput:\n1) Proposed file tree under {{tasksPath}}\n2) Full file contents\n3) Traceability table from tasks to source files",
+          "markdownDescription": "Deprecated. Use `scaffold.tasksPromptTemplate` instead.",
+          "deprecationMessage": "Use scaffold.tasksPromptTemplate instead. Legacy readyToBuild tokens are still supported."
+        },
+        "scaffold.readyToBuildPromptOutput": {
+          "type": "string",
+          "enum": [
+            "editor",
+            "clipboard",
+            "both"
+          ],
+          "default": "both",
+          "description": "Deprecated. Use scaffold.tasksPromptOutput instead.",
+          "deprecationMessage": "Use scaffold.tasksPromptOutput instead."
+        },
         "scaffold.codePromptTemplate": {
           "type": "string",
-          "default": "You are responsible for implementing code tasks for Scaffold based on the planning documents and task backlog.\n\n## CONTEXT & PLANNING DOCUMENTS\n\nBefore implementing, thoroughly read these planning documents to understand the full context:\n\n### Knowledge Base\nPath: {{knowledgeBaseIndexPath}}\nContains: Technical constraints, design patterns, architectural decisions, and domain knowledge.\nAction: Review all constraints and make sure your implementation respects them.\n\n### Product Requirements Document\nPath: {{prdIndexPath}}\nContains: Features, user stories, requirements, and success criteria.\nAction: Verify each task aligns with PRD and implements exactly what's specified.\n\n### Design System & UI/UX\nPath: {{designIndexPath}}\nContains: Component designs, layouts, interaction patterns, and visual specifications.\nAction: Ensure UI matches design exactly. Follow design system for spacing, colors, typography.\n\n### Engineering Plan\nPath: {{engineeringPlanIndexPath}}\nContains: Architecture, tech stack, module structure, integration points, and implementation patterns.\nAction: Follow the architectural decisions. Integrate components as specified. Use recommended patterns.\n\n### Task Plan & Backlog\nPath: {{readyToBuildPath}}/backlog.md\nContains: Master list of tasks with checkboxes for progress tracking.\nAction: Look at this to understand task priorities and dependencies.\n\n### Detailed Task Files\nPath: {{readyToBuildPath}}/*.md (individual task files)\nContains: Full task details, acceptance criteria, and specific requirements.\nAction: Read the task file for the task you're implementing. This is your implementation spec.\n\n## IMPLEMENTATION WORKFLOW\n\n### Step 1: Select Tasks\n- Read {{readyToBuildPath}}/backlog.md\n- Identify highest-priority tasks that are NOT checked [ ]\n- Check task dependencies - only implement if prerequisites are done\n- Pick 1-3 related tasks to work on in this session (avoid context switching)\n\n### Step 2: Read Task Specification\n- Open the detailed task file for each task you're implementing\n- Understand: Title, description, context, and acceptance criteria\n- Note: Dependencies, files to create/modify, and test requirements\n- Ask questions in implementation notes if anything is unclear\n\n### Step 3: Design Implementation\nBefore coding, outline your approach:\n- How does this task fit into the existing codebase?\n- Which files need to be created or modified?\n- What dependencies does this need from other tasks?\n- How will this be tested?\n\n### Step 4: Implement Incrementally\n- Start with core logic, then add features\n- Make small, logical commits (not all code at once)\n- Follow the engineering patterns from Engineering Plan\n- Follow the design specifications exactly\n- Add comments for non-obvious code\n\n### Step 5: Test & Validate\n- Implement tests alongside code (not after)\n- Verify all acceptance criteria are met\n- Test integration with other completed tasks\n- Validate UI matches design specifications\n\n## CODE ORGANIZATION\n\nAll code lives in the workspace root (outside .scaffold/).\n\nProject Structure:\n- Source code in appropriate directories (e.g., src/, components/, services/)\n- Tests alongside source code or in dedicated test/ directory\n- Configuration files at project root\n- Keep .scaffold/ folder for planning docs only - NO CODE HERE\n\n## IMPLEMENTATION REQUIREMENTS\n\n### Code Quality\n- Follow the tech stack and patterns defined in Engineering Plan\n- Use consistent naming conventions\n- Write clear, self-documenting code\n- Add comments for complex logic\n- Keep functions/components focused and single-purpose\n\n### Design Compliance\n- UI components must match the Design system exactly\n- Use specified colors, fonts, spacing, and component styles\n- Implement specified interactions and animations\n- Respect accessibility requirements from Design\n\n### Architecture Compliance\n- Follow module structure from Engineering Plan\n- Use specified patterns for state management, API calls, etc.\n- Integrate with other modules as specified\n- Use recommended libraries and tools\n\n### Testing Strategy\n- Write unit tests for logic\n- Write integration tests for module interactions\n- Write UI tests for user interactions\n- Verify all acceptance criteria with tests\n\n## OUTPUT FORMAT\n\nProvide a detailed implementation plan:\n\n### Part 1: Task Analysis\n- Which tasks are you implementing?\n- What are the key acceptance criteria?\n- What dependencies need to be satisfied?\n- Any ambiguities or open questions?\n\n### Part 2: Implementation Plan\n- File-by-file breakdown of what needs to be created/modified\n- Order of implementation (what to code first)\n- How this integrates with existing code\n- Testing approach for each task\n\n### Part 3: Code Implementation\n- Show all code changes needed\n- Include file paths and full content\n- Add explanatory comments\n- Show how files integrate together\n\n### Part 4: Validation\n- List validation steps to verify implementation\n- How to test each acceptance criterion\n- Expected test results\n- Manual testing steps if applicable\n\n### Part 5: Next Steps\n- Tasks completed in this session\n- How to mark tasks as done in Task Plan backlog\n- Recommended tasks to work on next\n\n## CRITICAL RULES\n\n- DO: Implement EXACTLY what the task specifies, not more\n- DO: Reference design specs for every UI element\n- DO: Follow architecture patterns from Engineering Plan\n- DO: Write tests as you code, not after\n- DO: Keep changes focused and incremental\n- DON'T: Add unplanned features (stick to task scope)\n- DON'T: Ignore design system (UI must match Design exactly)\n- DON'T: Skip testing or error handling\n- DON'T: Create code in .scaffold/ folder\n- DON'T: Leave TODOs without implementation plan",
-          "markdownDescription": "Template used by **Generate Code Prompt**. Supported tokens: `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{readyToBuildPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{readyToBuildIndexPath}}`."
+          "default": "You are responsible for implementing code tasks for Scaffold based on the planning documents and task backlog.\n\n## CONTEXT & PLANNING DOCUMENTS\n\nBefore implementing, thoroughly read these planning documents to understand the full context:\n\n### Knowledge Base\nPath: {{knowledgeBaseIndexPath}}\nContains: Technical constraints, design patterns, architectural decisions, and domain knowledge.\nAction: Review all constraints and make sure your implementation respects them.\n\n### Product Requirements Document\nPath: {{prdIndexPath}}\nContains: Features, user stories, requirements, and success criteria.\nAction: Verify each task aligns with PRD and implements exactly what's specified.\n\n### Design System & UI/UX\nPath: {{designIndexPath}}\nContains: Component designs, layouts, interaction patterns, and visual specifications.\nAction: Ensure UI matches design exactly. Follow design system for spacing, colors, typography.\n\n### Engineering Plan\nPath: {{engineeringPlanIndexPath}}\nContains: Architecture, tech stack, module structure, integration points, and implementation patterns.\nAction: Follow the architectural decisions. Integrate components as specified. Use recommended patterns.\n\n### Task Plan & Backlog\nPath: {{tasksPath}}/backlog.md\nContains: Master list of tasks with checkboxes for progress tracking.\nAction: Look at this to understand task priorities and dependencies.\n\n### Detailed Task Files\nPath: {{tasksPath}}/*.md (individual task files)\nContains: Full task details, acceptance criteria, and specific requirements.\nAction: Read the task file for the task you're implementing. This is your implementation spec.\n\n## IMPLEMENTATION WORKFLOW\n\n### Step 1: Select Tasks\n- Read {{tasksPath}}/backlog.md\n- Identify highest-priority tasks that are NOT checked [ ]\n- Check task dependencies - only implement if prerequisites are done\n- Pick 1-3 related tasks to work on in this session (avoid context switching)\n\n### Step 2: Read Task Specification\n- Open the detailed task file for each task you're implementing\n- Understand: Title, description, context, and acceptance criteria\n- Note: Dependencies, files to create/modify, and test requirements\n- Ask questions in implementation notes if anything is unclear\n\n### Step 3: Design Implementation\nBefore coding, outline your approach:\n- How does this task fit into the existing codebase?\n- Which files need to be created or modified?\n- What dependencies does this need from other tasks?\n- How will this be tested?\n\n### Step 4: Implement Incrementally\n- Start with core logic, then add features\n- Make small, logical commits (not all code at once)\n- Follow the engineering patterns from Engineering Plan\n- Follow the design specifications exactly\n- Add comments for non-obvious code\n\n### Step 5: Test & Validate\n- Implement tests alongside code (not after)\n- Verify all acceptance criteria are met\n- Test integration with other completed tasks\n- Validate UI matches design specifications\n\n## CODE ORGANIZATION\n\nAll code lives in the workspace root (outside .scaffold/).\n\nProject Structure:\n- Source code in appropriate directories (e.g., src/, components/, services/)\n- Tests alongside source code or in dedicated test/ directory\n- Configuration files at project root\n- Keep .scaffold/ folder for planning docs only - NO CODE HERE\n\n## IMPLEMENTATION REQUIREMENTS\n\n### Code Quality\n- Follow the tech stack and patterns defined in Engineering Plan\n- Use consistent naming conventions\n- Write clear, self-documenting code\n- Add comments for complex logic\n- Keep functions/components focused and single-purpose\n\n### Design Compliance\n- UI components must match the Design system exactly\n- Use specified colors, fonts, spacing, and component styles\n- Implement specified interactions and animations\n- Respect accessibility requirements from Design\n\n### Architecture Compliance\n- Follow module structure from Engineering Plan\n- Use specified patterns for state management, API calls, etc.\n- Integrate with other modules as specified\n- Use recommended libraries and tools\n\n### Testing Strategy\n- Write unit tests for logic\n- Write integration tests for module interactions\n- Write UI tests for user interactions\n- Verify all acceptance criteria with tests\n\n## OUTPUT FORMAT\n\nProvide a detailed implementation plan:\n\n### Part 1: Task Analysis\n- Which tasks are you implementing?\n- What are the key acceptance criteria?\n- What dependencies need to be satisfied?\n- Any ambiguities or open questions?\n\n### Part 2: Implementation Plan\n- File-by-file breakdown of what needs to be created/modified\n- Order of implementation (what to code first)\n- How this integrates with existing code\n- Testing approach for each task\n\n### Part 3: Code Implementation\n- Show all code changes needed\n- Include file paths and full content\n- Add explanatory comments\n- Show how files integrate together\n\n### Part 4: Validation\n- List validation steps to verify implementation\n- How to test each acceptance criterion\n- Expected test results\n- Manual testing steps if applicable\n\n### Part 5: Next Steps\n- Tasks completed in this session\n- How to mark tasks as done in Task Plan backlog\n- Recommended tasks to work on next\n\n## CRITICAL RULES\n\n- DO: Implement EXACTLY what the task specifies, not more\n- DO: Reference design specs for every UI element\n- DO: Follow architecture patterns from Engineering Plan\n- DO: Write tests as you code, not after\n- DO: Keep changes focused and incremental\n- DON'T: Add unplanned features (stick to task scope)\n- DON'T: Ignore design system (UI must match Design exactly)\n- DON'T: Skip testing or error handling\n- DON'T: Create code in .scaffold/ folder\n- DON'T: Leave TODOs without implementation plan",
+          "markdownDescription": "Template used by **Generate Code Prompt**. Supported tokens: `{{knowledgeBasePath}}`, `{{prdPath}}`, `{{designPath}}`, `{{engineeringPlanPath}}`, `{{tasksPath}}`, `{{knowledgeBaseIndexPath}}`, `{{prdIndexPath}}`, `{{designIndexPath}}`, `{{engineeringPlanIndexPath}}`, `{{tasksIndexPath}}`. Legacy `{{readyToBuildPath}}` and `{{readyToBuildIndexPath}}` tokens are still supported for backward compatibility."
         },
         "scaffold.codePromptOutput": {
           "type": "string",

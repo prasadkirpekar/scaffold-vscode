@@ -35,11 +35,15 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ScaffoldStorage = void 0;
 const path = __importStar(require("node:path"));
+const node_fs_1 = require("node:fs");
 const vscode = __importStar(require("vscode"));
 const models_1 = require("./models");
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const TASK_BACKLOG_FILE = "backlog.md";
+const LEGACY_SECTION_FOLDERS = {
+    readyToBuild: "ready-to-code"
+};
 // Sections that are always accessible without requiring previous section progress
 const ALWAYS_ACCESSIBLE = ["knowledgeBase", "prd"];
 function nowIso() {
@@ -84,6 +88,28 @@ class ScaffoldStorage {
     getSectionsRootUri() {
         return vscode.Uri.joinPath(this.getDataRootUri(), "sections");
     }
+    async migrateLegacySectionFolders() {
+        const sectionsRoot = this.getSectionsRootUri();
+        try {
+            await vscode.workspace.fs.stat(sectionsRoot);
+        }
+        catch {
+            return;
+        }
+        for (const section of models_1.SECTIONS) {
+            const legacyFolderName = LEGACY_SECTION_FOLDERS[section.key];
+            if (!legacyFolderName || legacyFolderName === section.folderName) {
+                continue;
+            }
+            const currentUri = vscode.Uri.joinPath(sectionsRoot, section.folderName);
+            const legacyUri = vscode.Uri.joinPath(sectionsRoot, legacyFolderName);
+            const currentExists = await this.pathExists(currentUri);
+            const legacyExists = await this.pathExists(legacyUri);
+            if (!currentExists && legacyExists) {
+                await vscode.workspace.fs.rename(legacyUri, currentUri, { overwrite: false });
+            }
+        }
+    }
     /**
      * Returns the workspace path for section content files.
      * All planning sections live under .scaffold/sections.
@@ -111,6 +137,7 @@ class ScaffoldStorage {
         }
     }
     async initialize() {
+        await this.migrateLegacySectionFolders();
         const dataRoot = this.getDataRootUri();
         const statesDir = vscode.Uri.joinPath(dataRoot, ".states");
         await this.ensureDir(dataRoot);
@@ -122,19 +149,7 @@ class ScaffoldStorage {
             if (!(await this.readFile(statesUri))) {
                 await this.writeJson(statesUri, {});
             }
-            const sectionRoot = this.getSectionRootUri(section.key);
-            const overviewFile = `overview${this.getDefaultFileExtension(section.key)}`;
-            const starter = vscode.Uri.joinPath(sectionRoot, overviewFile);
-            if (!(await this.readFile(starter))) {
-                await this.writeFile(starter, this.getStarterContent(section.key, overviewFile));
-                const states = await this.getFileStates(section.key);
-                states[overviewFile] = { status: "editing" };
-                await this.writeJson(this.getSectionStatesUri(section.key), states);
-                await this.syncSectionIndex(section.key, { [overviewFile]: `${section.label} overview` });
-            }
-            else {
-                await this.syncSectionIndex(section.key);
-            }
+            await this.syncSectionIndex(section.key);
         }
         await this.syncTaskBacklog();
         await this.appendActivity("Workspace initialized.");
@@ -154,6 +169,17 @@ class ScaffoldStorage {
         }
         const states = await this.getFileStates(section);
         return states[relativePath]?.status === "finalized";
+    }
+    async getSectionStatusCounts(section) {
+        const states = await this.getFileStates(section);
+        const entries = Object.values(states);
+        const finalized = entries.filter((entry) => entry.status === "finalized").length;
+        const total = entries.length;
+        return { editing: total - finalized, finalized, total };
+    }
+    async getTotalEditingCount() {
+        const counts = await Promise.all(models_1.SECTIONS.map((section) => this.getSectionStatusCounts(section.key)));
+        return counts.reduce((sum, count) => sum + count.editing, 0);
     }
     async finalizeFile(section, fileUri) {
         if (!this.isSupportedSectionFilePath(section, fileUri.path)) {
@@ -200,9 +226,11 @@ class ScaffoldStorage {
                 break;
             }
         }
-        const originalContent = await this.readFile(fileUri) ?? "";
-        await this.writeFile(candidateUri, originalContent);
         const newRelativePath = path.posix.relative(sectionRoot.path, candidateUri.path);
+        const previousRelativePath = path.posix.relative(sectionRoot.path, fileUri.path);
+        const previousReference = path.posix.relative(path.posix.dirname(newRelativePath), previousRelativePath) || path.posix.basename(fileUri.path);
+        const title = toTitle(path.posix.basename(candidateUri.path));
+        await this.writeFile(candidateUri, this.getRevisionTemplate(candidateUri, title, previousReference));
         const states = await this.getFileStates(section);
         states[newRelativePath] = { status: "editing" };
         await this.writeJson(this.getSectionStatesUri(section), states);
@@ -214,10 +242,8 @@ class ScaffoldStorage {
         return candidateUri;
     }
     async getSectionProgress(section) {
-        const states = await this.getFileStates(section);
-        const entries = Object.values(states);
-        const finalized = entries.filter((e) => e.status === "finalized").length;
-        return { finalized, total: entries.length };
+        const { finalized, total } = await this.getSectionStatusCounts(section);
+        return { finalized, total };
     }
     async isSectionAccessible(section) {
         if (ALWAYS_ACCESSIBLE.includes(section)) {
@@ -234,6 +260,7 @@ class ScaffoldStorage {
     async syncTaskBacklog() {
         const backlogUri = this.getTaskBacklogUri();
         const files = (await this.listAllSectionFileRelativePaths("readyToBuild")).sort((a, b) => a.localeCompare(b));
+        const sectionRoot = this.getSectionRootUri("readyToBuild");
         // Preserve existing done markers
         const existingDone = new Set();
         const existingContent = await this.readFile(backlogUri);
@@ -244,6 +271,23 @@ class ScaffoldStorage {
                     existingDone.add(match[1]);
                 }
             }
+        }
+        const states = await this.getFileStates("readyToBuild");
+        let statesChanged = false;
+        for (const file of files) {
+            if (existingDone.has(file) && states[file]?.status !== "finalized") {
+                states[file] = {
+                    status: "finalized",
+                    finalizedAt: states[file]?.finalizedAt ?? nowIso()
+                };
+                statesChanged = true;
+            }
+            if (states[file]?.status === "finalized") {
+                await this.setFileReadonly(vscode.Uri.joinPath(sectionRoot, file));
+            }
+        }
+        if (statesChanged) {
+            await this.writeJson(this.getSectionStatesUri("readyToBuild"), states);
         }
         const descriptions = await this.readSectionIndexDescriptions("readyToBuild");
         const lines = [];
@@ -256,7 +300,7 @@ class ScaffoldStorage {
         }
         else {
             for (const file of files) {
-                const done = existingDone.has(file);
+                const done = states[file]?.status === "finalized";
                 const desc = descriptions[file]?.trim();
                 const check = done ? "[x]" : "[ ]";
                 lines.push(desc ? `- ${check} [${file}](./${file}) - ${desc}` : `- ${check} [${file}](./${file})`);
@@ -266,18 +310,24 @@ class ScaffoldStorage {
         await this.writeFile(backlogUri, lines.join("\n"));
     }
     async markTaskDone(section, fileUri) {
+        if (section !== "readyToBuild") {
+            throw new Error("Mark Task Done can only be used in the Task Plan section.");
+        }
         const sectionRoot = this.getSectionRootUri(section);
         const relativePath = path.posix.relative(sectionRoot.path, fileUri.path);
-        const backlogUri = this.getTaskBacklogUri();
-        const content = await this.readFile(backlogUri);
-        if (!content) {
-            return;
+        if (!relativePath || relativePath.startsWith("..")) {
+            throw new Error("Task is outside section root.");
         }
-        const updated = content.replace(new RegExp(`(- )\\[ \\] (\\[${escapeRegExp(relativePath)}\\])`, "g"), "$1[x] $2");
-        if (updated !== content) {
-            await this.writeFile(backlogUri, updated);
-            await this.appendActivity(`Task marked done: ${relativePath}`);
+        const states = await this.getFileStates(section);
+        if (states[relativePath]?.status === "finalized") {
+            throw new Error("Task is already done and cannot be reverted.");
         }
+        states[relativePath] = { status: "finalized", finalizedAt: nowIso() };
+        await this.writeJson(this.getSectionStatesUri(section), states);
+        await this.setFileReadonly(fileUri);
+        await this.syncTaskBacklog();
+        await this.syncSectionIndex(section);
+        await this.appendActivity(`Task marked done: ${relativePath}`);
     }
     async createSectionFile(section, relativeDir, pageName, description) {
         const accessible = await this.isSectionAccessible(section);
@@ -456,6 +506,15 @@ class ScaffoldStorage {
     async ensureDir(uri) {
         await vscode.workspace.fs.createDirectory(uri);
     }
+    async pathExists(uri) {
+        try {
+            await vscode.workspace.fs.stat(uri);
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
     async readJson(uri) {
         const content = await this.readFile(uri);
         if (!content) {
@@ -484,31 +543,16 @@ class ScaffoldStorage {
     async writeFile(uri, content) {
         await vscode.workspace.fs.writeFile(uri, encoder.encode(content));
     }
-    getStarterContent(section, fileName) {
-        const ext = path.posix.extname(fileName).toLowerCase();
-        if (section === "readyToBuild") {
-            return "# Task Plan\n\n> Add task files to this section. Use the Generate Task Plan Prompt to have Copilot create tasks from your Engineering Plan.\n";
+    async setFileReadonly(uri) {
+        if (uri.scheme !== "file") {
+            return;
         }
-        if (ext === ".html") {
-            return [
-                "<!doctype html>",
-                '<html lang="en">',
-                "<head>",
-                '  <meta charset="UTF-8" />',
-                '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
-                "  <title>Overview</title>",
-                "</head>",
-                "<body>",
-                "  <h1>Overview</h1>",
-                "</body>",
-                "</html>",
-                ""
-            ].join("\n");
+        try {
+            await node_fs_1.promises.chmod(uri.fsPath, 0o444);
         }
-        if (ext === ".puml") {
-            return ["@startuml", "title Overview", "@enduml", ""].join("\n");
+        catch {
+            // Best effort; state remains authoritative even if the OS does not honor permissions changes.
         }
-        return `# ${this.getSectionDefinition(section).label} Overview\n\n`;
     }
     getNewFileTemplate(section, fileName, title) {
         const ext = path.posix.extname(fileName).toLowerCase();
@@ -532,6 +576,36 @@ class ScaffoldStorage {
             return ["@startuml", `title ${title}`, "@enduml", ""].join("\n");
         }
         return `# ${title}\n\n`;
+    }
+    getRevisionTemplate(fileUri, title, previousReference) {
+        const ext = path.posix.extname(fileUri.path).toLowerCase();
+        if (ext === ".html") {
+            return [
+                "<!doctype html>",
+                '<html lang="en">',
+                "<head>",
+                '  <meta charset="UTF-8" />',
+                '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+                `  <title>${title}</title>`,
+                "</head>",
+                "<body>",
+                `  <h1>${title}</h1>`,
+                `  <p>Previous version: <a href=\"./${previousReference}\">${previousReference}</a></p>`,
+                "</body>",
+                "</html>",
+                ""
+            ].join("\n");
+        }
+        if (ext === ".puml") {
+            return [
+                "@startuml",
+                `title ${title}`,
+                `' Previous version: ${previousReference}`,
+                "@enduml",
+                ""
+            ].join("\n");
+        }
+        return `# ${title}\n\nPrevious version: [${previousReference}](./${previousReference})\n\n`;
     }
     async readSectionIndexDescriptions(section) {
         const indexUri = this.getSectionIndexUri(section);

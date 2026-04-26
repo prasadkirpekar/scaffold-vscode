@@ -47,8 +47,8 @@ exports.SECTIONS = [
         label: "UI Design",
         folderName: "design",
         viewId: "scaffold.design",
-        supportedFileExtensions: [".html"],
-        defaultFileExtension: ".html"
+        supportedFileExtensions: [".md", ".html"],
+        defaultFileExtension: ".md"
     },
     {
         key: "engineeringPlan",
@@ -61,7 +61,7 @@ exports.SECTIONS = [
     {
         key: "readyToBuild",
         label: "Task Plan",
-        folderName: "ready-to-code",
+        folderName: "tasks",
         viewId: "scaffold.readyToBuild",
         supportedFileExtensions: [".md"],
         defaultFileExtension: ".md",

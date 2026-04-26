@@ -4,6 +4,11 @@ import { SectionKey, SECTIONS } from "./models";
 import { SectionNodeItem, SectionTreeProvider } from "./providers/sectionTreeProvider";
 import { ScaffoldStorage } from "./storage";
 
+type SectionViewState = {
+  provider: SectionTreeProvider;
+  treeView: vscode.TreeView<SectionNodeItem>;
+};
+
 const DEFAULT_TASK_PLAN_PROMPT_TEMPLATE = [
   "You are responsible for breaking down the product into executable implementation tasks for Scaffold.",
   "",
@@ -68,7 +73,7 @@ const DEFAULT_TASK_PLAN_PROMPT_TEMPLATE = [
   "Create two outputs:",
   "",
   "### Output 1: Master Backlog File",
-  "Create or append to: {{readyToBuildPath}}/backlog.md",
+  "Create or append to: {{tasksPath}}/backlog.md",
   "Format: Simple checklist with task IDs and titles (for progress tracking)",
   "Example:",
   "```",
@@ -78,12 +83,12 @@ const DEFAULT_TASK_PLAN_PROMPT_TEMPLATE = [
   "```",
   "",
   "### Output 2: Detailed Task Files",
-  "Create individual task files in: {{readyToBuildPath}}/",
+  "Create individual task files in: {{tasksPath}}/",
   "Filename pattern: feature-name-task-id.md",
   "Include full task details (ID, title, description, acceptance criteria, etc.)",
   "",
   "### Output 3: Traceability Matrix",
-  "Create: {{readyToBuildPath}}/traceability.md",
+  "Create: {{tasksPath}}/traceability.md",
   "Show which tasks implement which requirements from PRD and Design.",
   "Ensure 100% coverage of PRD features.",
   "",
@@ -125,19 +130,19 @@ const DEFAULT_CODE_PROMPT_TEMPLATE = [
   "Action: Follow the architectural decisions. Integrate components as specified. Use recommended patterns.",
   "",
   "### Task Plan & Backlog",
-  "Path: {{readyToBuildPath}}/backlog.md",
+  "Path: {{tasksPath}}/backlog.md",
   "Contains: Master list of tasks with checkboxes for progress tracking.",
   "Action: Look at this to understand task priorities and dependencies.",
   "",
   "### Detailed Task Files",
-  "Path: {{readyToBuildPath}}/*.md (individual task files)",
+  "Path: {{tasksPath}}/*.md (individual task files)",
   "Contains: Full task details, acceptance criteria, and specific requirements.",
   "Action: Read the task file for the task you're implementing. This is your implementation spec.",
   "",
   "## IMPLEMENTATION WORKFLOW",
   "",
   "### Step 1: Select Tasks",
-  "- Read {{readyToBuildPath}}/backlog.md",
+  "- Read {{tasksPath}}/backlog.md",
   "- Identify highest-priority tasks that are NOT checked [ ]",
   "- Check task dependencies - only implement if prerequisites are done",
   "- Pick 1-3 related tasks to work on in this session (avoid context switching)",
@@ -261,37 +266,74 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const workspaceFolderUri = workspaceFolder.uri;
   const storage = new ScaffoldStorage(workspaceFolder);
+  await storage.migrateLegacySectionFolders();
 
-  const providers = new Map<SectionKey, SectionTreeProvider>(
-    SECTIONS.map((s) => [s.key, new SectionTreeProvider(storage, s.key)])
-  );
+  const sectionViews = new Map<SectionKey, SectionViewState>();
 
   for (const section of SECTIONS) {
-    const provider = providers.get(section.key)!;
-    context.subscriptions.push(
-      vscode.window.registerTreeDataProvider(section.viewId, provider)
-    );
+    const provider = new SectionTreeProvider(storage, section.key);
+    const treeView = vscode.window.createTreeView(section.viewId, { treeDataProvider: provider });
+    sectionViews.set(section.key, { provider, treeView });
+    context.subscriptions.push(treeView);
   }
 
-  const refreshAll = (): void => {
-    for (const provider of providers.values()) {
-      provider.refresh();
-    }
+  const refreshAll = async (): Promise<void> => {
+    const totalEditingCount = await storage.getTotalEditingCount();
+    const totalEditingTooltip = totalEditingCount === 0
+      ? "No files are currently in editing or pending state across Scaffold"
+      : `${totalEditingCount} files are currently in editing or pending state across Scaffold`;
+
+    await Promise.all(
+      Array.from(sectionViews.entries(), async ([sectionKey, state]) => {
+        state.provider.refresh();
+
+        const accessible = await storage.isSectionAccessible(sectionKey);
+        const counts = await storage.getSectionStatusCounts(sectionKey);
+        const progressText = counts.total === 0 ? "no files" : `${counts.finalized}/${counts.total} complete`;
+        const tooltip = accessible
+          ? counts.total === 0
+            ? "No files yet"
+            : counts.editing === 0
+              ? `No editing files in this section · ${totalEditingTooltip}`
+              : `${counts.editing} editing files in this section · ${totalEditingTooltip}`
+          : counts.total === 0
+            ? "Locked until at least one file is finalized in the previous section"
+            : `${counts.editing} editing files in this section · ${progressText} · ${totalEditingTooltip} · locked until at least one file is finalized in the previous section`;
+
+        state.treeView.description = progressText;
+
+        state.treeView.badge = {
+          value: totalEditingCount,
+          tooltip
+        };
+      })
+    );
   };
 
   const updateContext = async (): Promise<void> => {
     const initialized = await storage.isInitialized();
     await vscode.commands.executeCommand("setContext", "scaffold.initialized", initialized);
+    await vscode.commands.executeCommand("setContext", "scaffoldInitialized", initialized);
+
+    if (!initialized) {
+      for (const { treeView } of sectionViews.values()) {
+        treeView.badge = undefined;
+      }
+    }
   };
 
   await updateContext();
+  if (await storage.isInitialized()) {
+    await storage.syncTaskBacklog();
+  }
+  await refreshAll();
 
   context.subscriptions.push(
     vscode.commands.registerCommand("scaffold.initializeWorkspace", async () => {
       try {
         await storage.initialize();
         await updateContext();
-        refreshAll();
+        await refreshAll();
         vscode.window.showInformationMessage("Scaffold workspace initialized.");
       } catch (err: any) {
         vscode.window.showErrorMessage(`Failed to initialize workspace: ${err.message}`);
@@ -303,9 +345,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       try {
-        await storage.finalizeFile(node.section, node.uri);
-        refreshAll();
-        vscode.window.showInformationMessage(`${path.basename(node.uri.path)} finalized.`);
+        if (node.section === "readyToBuild") {
+          await storage.markTaskDone(node.section, node.uri);
+          vscode.window.showInformationMessage(`${path.basename(node.uri.path)} marked as done.`);
+        } else {
+          await storage.finalizeFile(node.section, node.uri);
+          vscode.window.showInformationMessage(`${path.basename(node.uri.path)} finalized.`);
+        }
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -315,9 +362,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!node || node.isDirectory) {
         return;
       }
+      if (node.section === "readyToBuild") {
+        vscode.window.showErrorMessage("Done tasks are read-only and cannot create revisions.");
+        return;
+      }
       try {
         const newUri = await storage.createFileRevision(node.section, node.uri);
-        refreshAll();
+        await refreshAll();
         const doc = await vscode.workspace.openTextDocument(newUri);
         await vscode.window.showTextDocument(doc);
       } catch (err: any) {
@@ -331,8 +382,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await storage.markTaskDone(node.section, node.uri);
-        refreshAll();
-        vscode.window.showInformationMessage(`${path.basename(node.uri.path)} marked as done in backlog.`);
+        await refreshAll();
+        vscode.window.showInformationMessage(`${path.basename(node.uri.path)} marked as done.`);
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -350,7 +401,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         const relativeDir = storage.getRelativePathInSection(node.section, node.uri);
         const newUri = await storage.createSectionFile(node.section, relativeDir, name, description);
-        refreshAll();
+        await refreshAll();
         const doc = await vscode.workspace.openTextDocument(newUri);
         await vscode.window.showTextDocument(doc);
       } catch (err: any) {
@@ -369,7 +420,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         const relativeDir = storage.getRelativePathInSection(node.section, node.uri);
         await storage.createSectionFolder(node.section, relativeDir, name);
-        refreshAll();
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -383,7 +434,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const description = await vscode.window.showInputBox({ prompt: "Enter short description (optional)" });
       try {
         const newUri = await storage.createSectionFile("knowledgeBase", "", name, description);
-        refreshAll();
+        await refreshAll();
         const doc = await vscode.workspace.openTextDocument(newUri);
         await vscode.window.showTextDocument(doc);
       } catch (err: any) {
@@ -398,7 +449,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await storage.createSectionFolder("knowledgeBase", "", name);
-        refreshAll();
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -412,7 +463,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const description = await vscode.window.showInputBox({ prompt: "Enter short description (optional)" });
       try {
         const newUri = await storage.createSectionFile("prd", "", name, description);
-        refreshAll();
+        await refreshAll();
         const doc = await vscode.workspace.openTextDocument(newUri);
         await vscode.window.showTextDocument(doc);
       } catch (err: any) {
@@ -427,7 +478,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await storage.createSectionFolder("prd", "", name);
-        refreshAll();
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -441,7 +492,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const description = await vscode.window.showInputBox({ prompt: "Enter short description (optional)" });
       try {
         const newUri = await storage.createSectionFile("design", "", name, description);
-        refreshAll();
+        await refreshAll();
         const doc = await vscode.workspace.openTextDocument(newUri);
         await vscode.window.showTextDocument(doc);
       } catch (err: any) {
@@ -456,7 +507,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await storage.createSectionFolder("design", "", name);
-        refreshAll();
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -470,7 +521,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const description = await vscode.window.showInputBox({ prompt: "Enter short description (optional)" });
       try {
         const newUri = await storage.createSectionFile("engineeringPlan", "", name, description);
-        refreshAll();
+        await refreshAll();
         const doc = await vscode.workspace.openTextDocument(newUri);
         await vscode.window.showTextDocument(doc);
       } catch (err: any) {
@@ -485,7 +536,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await storage.createSectionFolder("engineeringPlan", "", name);
-        refreshAll();
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -493,22 +544,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand("scaffold.generateReadyToBuildPrompt", async () => {
       const cfg = vscode.workspace.getConfiguration("scaffold", workspaceFolderUri);
-      const template = cfg.get<string>("readyToBuildPromptTemplate", DEFAULT_TASK_PLAN_PROMPT_TEMPLATE);
-      const outputMode = cfg.get<"editor" | "clipboard" | "both">("readyToBuildPromptOutput", "both");
+      const template = cfg.get<string>("tasksPromptTemplate")
+        ?? cfg.get<string>("readyToBuildPromptTemplate")
+        ?? DEFAULT_TASK_PLAN_PROMPT_TEMPLATE;
+      const outputMode = cfg.get<"editor" | "clipboard" | "both">("tasksPromptOutput")
+        ?? cfg.get<"editor" | "clipboard" | "both">("readyToBuildPromptOutput")
+        ?? "both";
       const toRelativePath = (uri: vscode.Uri): string =>
         path.relative(workspaceFolderUri.fsPath, uri.fsPath).split(path.sep).join("/");
+
+      const tasksPath = toRelativePath(storage.getSectionRootUri("readyToBuild"));
+      const tasksIndexPath = toRelativePath(storage.getSectionIndexUri("readyToBuild"));
 
       const replacements: Record<string, string> = {
         knowledgeBasePath: toRelativePath(storage.getSectionRootUri("knowledgeBase")),
         prdPath: toRelativePath(storage.getSectionRootUri("prd")),
         designPath: toRelativePath(storage.getSectionRootUri("design")),
         engineeringPlanPath: toRelativePath(storage.getSectionRootUri("engineeringPlan")),
-        readyToBuildPath: toRelativePath(storage.getSectionRootUri("readyToBuild")),
+        tasksPath,
+        readyToBuildPath: tasksPath,
         knowledgeBaseIndexPath: toRelativePath(storage.getSectionIndexUri("knowledgeBase")),
         prdIndexPath: toRelativePath(storage.getSectionIndexUri("prd")),
         designIndexPath: toRelativePath(storage.getSectionIndexUri("design")),
         engineeringPlanIndexPath: toRelativePath(storage.getSectionIndexUri("engineeringPlan")),
-        readyToBuildIndexPath: toRelativePath(storage.getSectionIndexUri("readyToBuild"))
+        tasksIndexPath,
+        readyToBuildIndexPath: tasksIndexPath
       };
 
       const prompt = template.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (full, key: string) => replacements[key] ?? full);
@@ -538,17 +598,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const toRelativePath = (uri: vscode.Uri): string =>
         path.relative(workspaceFolderUri.fsPath, uri.fsPath).split(path.sep).join("/");
 
+      const tasksPath = toRelativePath(storage.getSectionRootUri("readyToBuild"));
+      const tasksIndexPath = toRelativePath(storage.getSectionIndexUri("readyToBuild"));
+
       const replacements: Record<string, string> = {
         knowledgeBasePath: toRelativePath(storage.getSectionRootUri("knowledgeBase")),
         prdPath: toRelativePath(storage.getSectionRootUri("prd")),
         designPath: toRelativePath(storage.getSectionRootUri("design")),
         engineeringPlanPath: toRelativePath(storage.getSectionRootUri("engineeringPlan")),
-        readyToBuildPath: toRelativePath(storage.getSectionRootUri("readyToBuild")),
+        tasksPath,
+        readyToBuildPath: tasksPath,
         knowledgeBaseIndexPath: toRelativePath(storage.getSectionIndexUri("knowledgeBase")),
         prdIndexPath: toRelativePath(storage.getSectionIndexUri("prd")),
         designIndexPath: toRelativePath(storage.getSectionIndexUri("design")),
         engineeringPlanIndexPath: toRelativePath(storage.getSectionIndexUri("engineeringPlan")),
-        readyToBuildIndexPath: toRelativePath(storage.getSectionIndexUri("readyToBuild"))
+        tasksIndexPath,
+        readyToBuildIndexPath: tasksIndexPath
       };
 
       const prompt = template.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (full, key: string) => replacements[key] ?? full);
@@ -579,7 +644,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const description = await vscode.window.showInputBox({ prompt: "Enter short description (optional)" });
       try {
         const newUri = await storage.createSectionFile("readyToBuild", "", name, description);
-        refreshAll();
+        await refreshAll();
         const doc = await vscode.workspace.openTextDocument(newUri);
         await vscode.window.showTextDocument(doc);
       } catch (err: any) {
@@ -591,6 +656,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!node) {
         return;
       }
+      if (node.section === "readyToBuild" && (await storage.isFileFinalized(node.section, node.uri))) {
+        vscode.window.showErrorMessage("Done tasks are read-only and cannot be renamed.");
+        return;
+      }
       const newName = await vscode.window.showInputBox({
         prompt: "Enter new name",
         value: path.basename(node.uri.path)
@@ -600,7 +669,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await storage.renameItem(node.section, node.uri, newName);
-        refreshAll();
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
@@ -608,6 +677,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand("scaffold.deleteItem", async (node?: SectionNodeItem) => {
       if (!node) {
+        return;
+      }
+      if (!node.isDirectory && node.section === "readyToBuild" && (await storage.isFileFinalized(node.section, node.uri))) {
+        vscode.window.showErrorMessage("Done tasks are read-only and cannot be deleted.");
         return;
       }
       const label = path.basename(node.uri.path);
@@ -621,14 +694,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await storage.deleteItem(node.section, node.uri, node.isDirectory);
-        refreshAll();
+        await refreshAll();
       } catch (err: any) {
         vscode.window.showErrorMessage(err.message);
       }
     }),
 
-    vscode.commands.registerCommand("scaffold.refresh", () => {
-      refreshAll();
+    vscode.commands.registerCommand("scaffold.refresh", async () => {
+      await refreshAll();
     })
   );
 }
